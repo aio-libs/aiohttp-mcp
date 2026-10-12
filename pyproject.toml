@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiohttp-mcp"
+version = "0.1.0"
+description = "MCP (Model Context Protocol) server support for aiohttp"
+readme = "README.rst"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: aiohttp",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aiohttp>=3.10",
+    "aiohttp-sse>=3",
+    "typing_extensions>=4.9; python_version<'3.13'",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-aiohttp"]
+
+[project.urls]
+Repository = "https://github.com/aio-libs/aiohttp-mcp"
+
+[tool.setuptools]
+packages = ["aiohttp_mcp"]
+
+[tool.setuptools.package-data]
+aiohttp_mcp = ["py.typed"]
