@@ -83,7 +83,7 @@ async def test_emit_from_simple_method(aiohttp_client: AiohttpClient) -> None:
         await req._emit(notification)
         return {}
 
-    server.methods = {**server.methods, "test/emit": Method(bad)}
+    server._methods = {**server._methods, "test/emit": Method(bad)}
     client = await aiohttp_client(app)
     async with client.post(
         "/mcp",
@@ -144,10 +144,10 @@ async def test_listen_disconnect_cancels(aiohttp_client: AiohttpClient) -> None:
     ) as resp:
         async with asyncio.timeout(5):
             await next_sse_data(resp)  # ack
-        assert len(server.subscriptions) == 1
+        assert len(server._subscriptions) == 1
     # Leaving the block closes the response stream: the cancellation signal.
     async with asyncio.timeout(5):
-        while server.subscriptions:
+        while server._subscriptions:
             await asyncio.sleep(0.01)
 
 
@@ -173,4 +173,4 @@ async def test_concurrent_subscriptions(aiohttp_client: AiohttpClient) -> None:
             ack2 = await next_sse_data(resp2)
         assert ack1["params"]["_meta"][META_SUBSCRIPTION_ID] == "a"
         assert ack2["params"]["_meta"][META_SUBSCRIPTION_ID] == "b"
-        assert len(server.subscriptions) == 2
+        assert len(server._subscriptions) == 2

@@ -23,6 +23,7 @@ from ._protocol import (
     SubscriptionFilter,
     SubscriptionsListenResult
 )
+from ._auth import Authorization
 from ._transport import MCPRequest, Method, handle_request
 
 
@@ -54,6 +55,7 @@ class MCPServer:
         discover_cache_scope: Literal["public", "private"],
         allowed_origins: Collection[str] | Callable[[str], bool],
         sse_keepalive: float,
+        authorization: Authorization | None,
     ) -> None:
         if not name:
             raise ValueError("name must be a non-empty string")
@@ -66,26 +68,27 @@ class MCPServer:
         if sse_keepalive <= 0:
             raise ValueError("sse_keepalive must be > 0")
 
-        self.server_info: Implementation = {"name": name, "version": version}
+        self._server_info: Implementation = {"name": name, "version": version}
         if title is not None:
-            self.server_info["title"] = title
+            self._server_info["title"] = title
         if description is not None:
-            self.server_info["description"] = description
+            self._server_info["description"] = description
         if website_url is not None:
-            self.server_info["websiteUrl"] = website_url
-        self.include_server_info = include_server_info
-        self.sse_keepalive = sse_keepalive
+            self._server_info["websiteUrl"] = website_url
+        self._include_server_info = include_server_info
+        self._sse_keepalive = sse_keepalive
         self._instructions = instructions
         self._discover_ttl_ms = round(discover_ttl * 1000)
         self._discover_cache_scope = discover_cache_scope
         self._allowed_origins = allowed_origins
-        self.subscriptions: set[Subscription] = set()
-        self.methods: Mapping[str, Method] = {
+        self._authorization = authorization
+        self._subscriptions: set[Subscription] = set()
+        self._methods: Mapping[str, Method] = {
             "server/discover": Method(self._discover),
             "subscriptions/listen": Method(self._listen, streaming=True),
         }
 
-    def origin_allowed(self, origin: str) -> bool:
+    def _origin_allowed(self, origin: str) -> bool:
         # https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#security-&-endpoint
 
         # Normalise origin
@@ -100,12 +103,12 @@ class MCPServer:
             return self._allowed_origins(host)
         return host in self._allowed_origins
 
-    async def handle(self, request: web.Request) -> web.StreamResponse:
+    async def _handle(self, request: web.Request) -> web.StreamResponse:
         """The MCP endpoint."""
         return await handle_request(self, request)
 
-    async def shutdown(self, app: web.Application) -> None:
-        for subscription in self.subscriptions:
+    async def _shutdown(self, app: web.Application) -> None:
+        for subscription in self._subscriptions:
             subscription.closing.set()
 
     async def _discover(self, request: MCPRequest) -> DiscoverResult:
@@ -127,7 +130,7 @@ class MCPServer:
             raise MCPError(INVALID_PARAMS, "notifications must be an object")
 
         subscription = Subscription(request.id)
-        self.subscriptions.add(subscription)
+        self._subscriptions.add(subscription)
         notification: JSONRPCNotification = {
             "jsonrpc": "2.0",
             "method": "notifications/subscriptions/acknowledged",
@@ -141,7 +144,7 @@ class MCPServer:
             await request._emit(notification)
             await subscription.closing.wait()
         finally:
-            self.subscriptions.discard(subscription)
+            self._subscriptions.discard(subscription)
 
         # https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/subscriptions#graceful-closure
         return {"_meta": {META_SUBSCRIPTION_ID: request.id}}

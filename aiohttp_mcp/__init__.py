@@ -1,15 +1,48 @@
 """MCP (Model Context Protocol) server support for aiohttp."""
 
 from collections.abc import Callable, Collection
-from typing import Literal
+from typing import Final, Literal
 
 from aiohttp import web
+from yarl import URL
 
+
+from ._auth import TOKEN_INFO_KEY, Authorization, ScopeMatcher, TokenInfo, TokenValidator
+from ._auth_server import (
+    AuthenticateRequest,
+    CheckCredentials,
+    ConsentContext,
+    LocalAuthorization,
+    RenderConsent,
+)
 from ._protocol import PROTOCOL_VERSIONS
 from ._server import MCPServer
+from ._validators import IntrospectionAuthorization
 
 __version__ = "0.1.0"
-__all__ = ("PROTOCOL_VERSIONS", "setup")
+
+# https://github.com/sphinx-doc/sphinx/issues/6495
+#: Protocol revisions implemented, newest first.
+PROTOCOL_VERSIONS: tuple[str, ...]  # type: ignore[no-redef]
+#: The :class:`~aiohttp.web.Request` key under which the validated
+#: :class:`TokenInfo` is stored for authenticated requests.
+TOKEN_INFO_KEY: web.RequestKey[TokenInfo]  # type: ignore[no-redef]
+
+__all__ = (
+    "PROTOCOL_VERSIONS",
+    "TOKEN_INFO_KEY",
+    "AuthenticateRequest",
+    "Authorization",
+    "CheckCredentials",
+    "ConsentContext",
+    "IntrospectionAuthorization",
+    "LocalAuthorization",
+    "RenderConsent",
+    "ScopeMatcher",
+    "TokenInfo",
+    "TokenValidator",
+    "setup",
+)
 
 
 def setup(
@@ -25,8 +58,10 @@ def setup(
     include_server_info: bool = True,
     discover_ttl: float = 3600.0,
     discover_cache_scope: Literal["public", "private"] = "public",
-    allowed_origins: Collection[str] | Callable[[str], bool] = ("localhost", "127.0.0.1", "::1"),
+    allowed_origins: Collection[str] | Callable[[str], bool] | None = None,
     sse_keepalive: float = 15.0,
+    authorization: Authorization | None = None,
+    well_known_routes: bool = True,
 ) -> MCPServer:
     """Serve an MCP endpoint at ``path`` on ``app``.
 
@@ -47,12 +82,28 @@ def setup(
         client (``"private"``).
     :param allowed_origins: Hosts allowed to appear in the ``Origin`` header
         (compared against the header's parsed host), or a callable receiving
-        that host and replacing the policy. The default accepts allows localhost,
-        change to your domain names for remote deployments.
+        that host and replacing the policy. Defaults to the host of
+        ``authorization``'s resource when authorization is configured, and to
+        ``localhost`` otherwise.
     :param sse_keepalive: Interval in seconds between SSE keep-alive comments
         on response streams; also bounds how quickly a client disconnect is
-        detected and the in-flight handler cancelled.
+        detected.
+    :param authorization: Enable authorization using :brand:`OAuth` tokens.
+    :param well_known_routes: Register the well-known discovery
+        documents on ``app``.  Set to :data:`False` when ``app`` is mounted as a
+        sub-application - those documents must be served from the origin
+        root, so call :meth:`Authorization.register_well_known` on the
+        root application instead.
     """
+    if authorization is not None:
+        authorization._bind(path)
+    if allowed_origins is None:
+        if authorization is not None:
+            host = URL(authorization._resource).host
+            assert host is not None  # enforced by Authorization
+            allowed_origins = (host,)
+        else:
+            allowed_origins = ("localhost", "127.0.0.1", "::1")
     server = MCPServer(
         name=name,
         version=version,
@@ -65,7 +116,12 @@ def setup(
         discover_cache_scope=discover_cache_scope,
         allowed_origins=allowed_origins,
         sse_keepalive=sse_keepalive,
+        authorization=authorization,
     )
-    app.router.add_post(path, server.handle)
-    app.on_shutdown.append(server.shutdown)
+    app.router.add_post(path, server._handle)
+    if authorization is not None:
+        authorization._register_routes(app)
+        if well_known_routes:
+            authorization.register_well_known(app)
+    app.on_shutdown.append(server._shutdown)
     return server

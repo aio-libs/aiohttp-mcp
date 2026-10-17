@@ -28,9 +28,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-aiohttp"]
+jwt = ["PyJWT[crypto]>=2.8"]
 
 [project.urls]
+Documentation = "https://aiohttp-mcp.readthedocs.io"
 Repository = "https://github.com/aio-libs/aiohttp-mcp"
 
 [tool.setuptools]

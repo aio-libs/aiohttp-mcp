@@ -14,7 +14,7 @@ if sys.version_info >= (3, 13):
 else:
     from typing_extensions import ReadOnly
 
-# Protocol revisions implemented, newest first.
+#: Protocol revisions implemented, newest first.
 PROTOCOL_VERSIONS: Final = ("2026-07-28",)
 
 # https://modelcontextprotocol.io/specification/2026-07-28/basic#_meta
@@ -228,11 +228,19 @@ class SubscriptionsListenResult(InputResult):
 class MCPError(Exception):
     """A JSON-RPC error response to be sent to the client."""
 
-    def __init__(self, code: int, message: str, *, data: object = None) -> None:
+    def __init__(
+        self,
+        code: int,
+        message: str,
+        *,
+        data: object = None,
+        request_id: "RequestId | None" = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.data = data
+        self.request_id = request_id
 
     @property
     def http_status(self) -> int:

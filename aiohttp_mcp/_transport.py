@@ -1,16 +1,26 @@
 """Streamable HTTP transport binding."""
 
 import asyncio
+import inspect
 import json
 import logging
-from collections.abc import Awaitable, Callable, Coroutine, Mapping
+from collections.abc import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Collection,
+    Coroutine,
+    Mapping,
+    Sequence,
+)
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
 
+from ._auth import TOKEN_INFO_KEY, TokenInfo, _AuthError
 from ._protocol import (
     HEADER_MISMATCH,
     INTERNAL_ERROR,
@@ -78,13 +88,23 @@ class MCPRequest:
     def client_capabilities(self) -> ClientCapabilities:
         return self.meta[META_CLIENT_CAPABILITIES]
 
+    @property
+    def auth(self) -> TokenInfo | None:
+        """Validated access-token information, if authorization is enabled."""
+        return self.http.get(TOKEN_INFO_KEY)
+
     async def _emit(self, message: JSONRPCNotification) -> None:
         if self._resp is None:
             raise RuntimeError("Method is not registered as streaming")
         await self._resp.send(json.dumps(message, separators=(",", ":")))
 
 
-Handler = Callable[[MCPRequest], Coroutine[None, None, InputResult | None]]
+Handler: TypeAlias = Callable[[MCPRequest], Coroutine[None, None, InputResult | None]]
+Scopes: TypeAlias = (
+    Sequence[str]
+    | Callable[[MCPRequest], Awaitable[Collection[str]]]
+    | Callable[[MCPRequest], AsyncGenerator[Collection[str], None]]
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,29 +113,155 @@ class Method:
 
     handler: Handler
     streaming: bool = False
+    scopes: Scopes = ()
+
+
+async def _resolve_scopes(
+    method: Method, ctx: MCPRequest
+) -> tuple[Collection[str], AsyncGenerator[Collection[str], None] | None]:
+    """Resolve a method's scope requirements for one call.
+
+    For the async-generator form the started generator is returned alongside
+    the scopes; the caller owns closing or resuming it.
+    """
+    scopes = method.scopes
+    if isinstance(scopes, Sequence):
+        return scopes, None
+    if inspect.isasyncgenfunction(scopes):
+        gen = scopes(ctx)
+        try:
+            return await anext(gen), gen
+        except StopAsyncIteration:
+            raise RuntimeError(
+                "scopes generator finished without yielding a scope set"
+            ) from None
+    fn = cast("Callable[[MCPRequest], Awaitable[Collection[str]]]", scopes)
+    return await fn(ctx), None
+
+
+async def _unwind_scopes(
+    gen: "AsyncGenerator[Collection[str], None]", exc: BaseException
+) -> None:
+    """Push the handler's exception into the scopes generator.
+
+    Ensures that ``async with``/``finally`` blocks around its ``yield`` roll
+    back, if needed. The original exception is never suppressed
+    (the caller re-raises it).
+    """
+    try:
+        await gen.athrow(exc)
+    except BaseException as cleanup_exc:
+        if cleanup_exc is not exc and not isinstance(cleanup_exc, StopAsyncIteration):
+            logger.exception("Scope resource cleanup failed")
+    else:
+        logger.error("Scopes generator yielded more than once")
+        await gen.aclose()
+
+
+async def _finish_scopes(gen: "AsyncGenerator[Collection[str], None]") -> None:
+    """Resume the scopes generator past its ``yield`` after a successful call."""
+    try:
+        await anext(gen)
+    except StopAsyncIteration:
+        return
+    await gen.aclose()
+    raise RuntimeError("scopes generator yielded more than once")
 
 
 async def handle_request(server: MCPServer, request: web.Request) -> web.StreamResponse:
     origin = request.headers.get("Origin")
-    if origin is not None and not server.origin_allowed(origin):
-        error = MCPError(INVALID_REQUEST, "Origin not allowed")
-        return web.json_response(error_envelope(error), status=403)
+    if origin is not None and not server._origin_allowed(origin):
+        origin_error = MCPError(INVALID_REQUEST, "Origin not allowed")
+        return web.json_response(error_envelope(origin_error), status=403)
 
     try:
-        message = await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        error = MCPError(PARSE_ERROR, "Parse error")
+        return await _serve_request(server, request)
+    except _AuthError as exc:
+        return exc.response
+    except MCPError as exc:
+        return web.json_response(error_envelope(exc, exc.request_id), status=exc.http_status)
+    except Exception:
+        logger.exception("Unhandled error serving MCP request")
+        error = MCPError(INTERNAL_ERROR, "Internal error")
         return web.json_response(error_envelope(error), status=error.http_status)
 
+
+async def _serve_request(server: MCPServer, request: web.Request) -> web.StreamResponse:
+    request_id: RequestId | None = None
+    ctx: MCPRequest | None = None
+    method: Method | None = None
+    scopes: Collection[str] = ()
+    scopes_gen: AsyncGenerator[Collection[str], None] | None = None
+    error: MCPError | None = None
     try:
+        try:
+            message = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise MCPError(PARSE_ERROR, "Parse error") from None
         request_id, params = _validate_message(message)
+        if message["method"] == "initialize":
+            # https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning#backward-compatibility-with-initialization-based-versions
+            raise MCPError(
+                METHOD_NOT_FOUND,
+                "The initialize handshake is not supported; supported protocol "
+                f"versions: {', '.join(PROTOCOL_VERSIONS)}",
+                data={"supported": list(PROTOCOL_VERSIONS)},
+            )
+        meta = validate_request_meta(params.pop("_meta", None))
+        _validate_headers(request, message["method"], params, meta[META_PROTOCOL_VERSION])
+        method = server._methods.get(message["method"])
+        if method is None:
+            raise MCPError(METHOD_NOT_FOUND, f"Unknown method {message['method']!r}")
+        ctx = MCPRequest(message["method"], request_id, params, meta, request)
+        try:
+            scopes, scopes_gen = await _resolve_scopes(method, ctx)
+        except Exception:
+            # Not an error backstop: converting to a deferred MCPError keeps
+            # the 401-first behaviour for unauthenticated callers whose input
+            # crashed the scopes callable.
+            logger.exception("Scope resolution failed for MCP method %r", ctx.method)
+            raise MCPError(INTERNAL_ERROR, "Internal error") from None
     except MCPError as exc:
-        return web.json_response(error_envelope(exc), status=exc.http_status)
+        error = exc
+
+    if server._authorization is not None:
+        # https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#access-token-usage
+        try:
+            info = await server._authorization._authenticate(request, scopes or None)
+        except BaseException:
+            if scopes_gen is not None:
+                await scopes_gen.aclose()
+            raise
+        request[TOKEN_INFO_KEY] = info
+
+    if error is not None:
+        # Raise any deferred exceptions after authentication succeeded.
+        assert scopes_gen is None
+        error.request_id = request_id
+        raise error
+    assert ctx is not None and method is not None  # Errors were handled above
 
     try:
-        return await _handle_rpc_request(server, request, message, request_id, params)
-    except MCPError as exc:
-        return web.json_response(error_envelope(exc, request_id), status=exc.http_status)
+        if method.streaming:
+            response = await _streaming_request(server, ctx, method.handler)
+        else:
+            response = await _basic_request(server, ctx, method.handler)
+    except BaseException as exc:
+        if scopes_gen is not None:
+            await _unwind_scopes(scopes_gen, exc)
+        if isinstance(exc, MCPError) and exc.request_id is None:
+            exc.request_id = request_id
+        raise
+    if scopes_gen is not None:
+        if method.streaming:
+            # The response is already on the wire; nothing can be returned.
+            try:
+                await _finish_scopes(scopes_gen)
+            except Exception:
+                logger.exception("Scope resource cleanup failed")
+        else:
+            await _finish_scopes(scopes_gen)
+    return response
 
 
 def _validate_message(message: object) -> tuple[RequestId, dict[str, object]]:
@@ -178,40 +324,11 @@ def _validate_headers(
             )
 
 
-async def _handle_rpc_request(
-    server: MCPServer,
-    request: web.Request,
-    message: JSONRPCRequest,
-    request_id: str | int,
-    params: dict[str, object],
+async def _basic_request(
+    server: MCPServer, ctx: MCPRequest, handler: Handler
 ) -> web.StreamResponse:
-    if message["method"] == "initialize":
-        # https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning#backward-compatibility-with-initialization-based-versions
-        raise MCPError(
-            METHOD_NOT_FOUND,
-            "The initialize handshake is not supported; supported protocol "
-            f"versions: {', '.join(PROTOCOL_VERSIONS)}",
-            data={"supported": list(PROTOCOL_VERSIONS)},
-        )
-    meta = validate_request_meta(params.pop("_meta", None))
-    _validate_headers(request, message["method"], params, meta[META_PROTOCOL_VERSION])
-
-    method = server.methods.get(message["method"])
-    if method is None:
-        raise MCPError(METHOD_NOT_FOUND, f"Unknown method {message['method']!r}")
-
-    ctx = MCPRequest(message["method"], request_id, params, meta, request)
-    if method.streaming:
-        return await _streaming_request(server, ctx, method.handler)
-
-    # Basic, non-SSE request.
-    try:
-        result = await method.handler(ctx)
-    except MCPError:
-        raise
-    except Exception:
-        logger.exception("Unhandled error in MCP method %r", ctx.method)
-        raise MCPError(INTERNAL_ERROR, "Internal error") from None
+    """A plain request/response method call (no SSE)."""
+    result = await handler(ctx)
     envelope: JSONRPCResultResponse = {
         "jsonrpc": "2.0",
         "id": ctx.id,
@@ -225,7 +342,7 @@ async def _streaming_request(
 ) -> web.StreamResponse:
     async with sse_response(
         ctx.http,
-        ping_interval=server.sse_keepalive,
+        ping_interval=server._sse_keepalive,
         allow_all_methods=True,
     ) as resp:
         ctx._resp = resp
@@ -233,7 +350,7 @@ async def _streaming_request(
 
         try:
             # While task not done.
-            while not (await asyncio.wait({task}, timeout=server.sse_keepalive))[0]:
+            while not (await asyncio.wait({task}, timeout=server._sse_keepalive))[0]:
                 if not resp.is_connected():
                     task.cancel()
                     with suppress(asyncio.CancelledError):
@@ -272,8 +389,8 @@ def _finalize_result(server: MCPServer, result: InputResult | None) -> Result:
     if result is None:
         result = {}
     final: Result = {"resultType": "complete", **result}
-    if server.include_server_info:
-        meta: ResultMeta = {META_SERVER_INFO: server.server_info.copy()}
+    if server._include_server_info:
+        meta: ResultMeta = {META_SERVER_INFO: server._server_info.copy()}
         if (handler_meta := final.get("_meta")) is not None:
             meta.update(handler_meta)
         final["_meta"] = meta
