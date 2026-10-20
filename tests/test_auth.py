@@ -199,7 +199,7 @@ async def test_token_info_exposed_to_handlers(aiohttp_client: AiohttpClient) -> 
         assert request.auth is not None
         return {"subject": request.auth.subject, "claims": dict(request.auth.claims)}
 
-    server._methods["test/whoami"] = Method(whoami)  # type: ignore[index]
+    server._methods["test/whoami"] = Method(whoami)
     client = await aiohttp_client(app)
     async with post(client, "test/whoami", token="good-token") as resp:
         result = await resp.json()
@@ -283,9 +283,9 @@ def scoped_app() -> tuple[web.Application, Mapping[str, Method]]:
     async def broken_scopes(request: MCPRequest) -> frozenset[str]:
         raise RuntimeError("scope lookup failed")
 
-    server._methods["test/write"] = Method(noop, scopes=("mcp:write",))  # type: ignore[index]
-    server._methods["test/write-pr"] = Method(noop, scopes=org_scopes)  # type: ignore[index]
-    server._methods["test/broken"] = Method(noop, scopes=broken_scopes)  # type: ignore[index]
+    server._methods["test/write"] = Method(noop, scopes=("mcp:write",))
+    server._methods["test/write-pr"] = Method(noop, scopes=org_scopes)
+    server._methods["test/broken"] = Method(noop, scopes=broken_scopes)
     return app, server._methods
 
 
@@ -359,7 +359,7 @@ async def test_scopes_ignored_without_authorization(aiohttp_client: AiohttpClien
     async def noop(request: MCPRequest) -> None:
         return None
 
-    server._methods["test/write"] = Method(noop, scopes=("mcp:write",))  # type: ignore[index]
+    server._methods["test/write"] = Method(noop, scopes=("mcp:write",))
     client = await aiohttp_client(app)
     async with post(client, "test/write") as resp:
         assert resp.status == 200
@@ -382,8 +382,8 @@ async def test_scope_hierarchy(aiohttp_client: AiohttpClient) -> None:
     async def org_scopes(request: MCPRequest) -> frozenset[str]:
         return frozenset({f"pr:{request.params['org']}"})
 
-    server._methods["test/write-pr"] = Method(noop, scopes=org_scopes)  # type: ignore[index]
-    server._methods["test/write"] = Method(noop, scopes=("mcp:write",))  # type: ignore[index]
+    server._methods["test/write-pr"] = Method(noop, scopes=org_scopes)
+    server._methods["test/write"] = Method(noop, scopes=("mcp:write",))
     client = await aiohttp_client(app)
 
     # "broad-token" holds the bare "pr" scope: it implies every pr:{org},
@@ -443,8 +443,8 @@ def generator_scoped_app(
         events.append("handler")
         return None
 
-    server._methods["test/write-pr"] = Method(write_pr, scopes=pr_scopes)  # type: ignore[index]
-    server._methods["test/stream-pr"] = Method(stream_pr, streaming=True, scopes=pr_scopes)  # type: ignore[index]
+    server._methods["test/write-pr"] = Method(write_pr, scopes=pr_scopes)
+    server._methods["test/stream-pr"] = Method(stream_pr, streaming=True, scopes=pr_scopes)
     return app, events
 
 

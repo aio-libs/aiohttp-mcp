@@ -15,6 +15,59 @@ Setup
 
 .. autodata:: PROTOCOL_VERSIONS
 
+Prompts
+=======
+
+.. autoclass:: aiohttp_mcp.PromptRegistry
+
+.. autoclass:: aiohttp_mcp.Prompt
+
+.. autoclass:: aiohttp_mcp.Doc
+
+.. autotype:: PromptHandler
+
+   A prompt template function. Prompt arguments arrive as keyword arguments;
+   an optional first parameter annotated :class:`MCPRequest` receives the
+   in-flight request.
+
+.. autotype:: PromptResult
+
+   What a prompt function may return: a plain string (one user text message),
+   or a sequence of :ref:`content blocks <aiohttp-mcp-content-types>` and
+   :class:`Message` objects. Bare content blocks become ``user`` messages.
+
+.. _aiohttp-mcp-content-types:
+
+Message content
++++++++++++++++
+
+This section defines all the message content types that can be returned as a prompt.
+Simple handlers can return a single :class:`str` which will be converted to a
+:class:`~aiohttp_mcp.TextContent`, others must return a sequence of the below classes, like::
+
+    return [ImageContent.from_file(Path("foo/bar.jpeg")), TextContent("Check the image")]
+
+.. autoclass:: aiohttp_mcp.Content()
+
+.. autoclass:: aiohttp_mcp.TextContent
+
+.. autoclass:: aiohttp_mcp.ImageContent
+
+.. autoclass:: aiohttp_mcp.AudioContent
+
+.. autoclass:: aiohttp_mcp.ResourceLink
+
+.. autoclass:: aiohttp_mcp.EmbeddedResource
+
+.. autoclass:: aiohttp_mcp.Message
+
+Common types
+============
+
+.. autoclass:: aiohttp_mcp.Icon
+
+.. autoclass:: aiohttp_mcp.MCPRequest()
+
 Authorization
 =============
 

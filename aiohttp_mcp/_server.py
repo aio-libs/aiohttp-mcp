@@ -20,10 +20,12 @@ from ._protocol import (
     JSONRPCNotification,
     MCPError,
     RequestId,
+    ServerCapabilities,
     SubscriptionFilter,
     SubscriptionsListenResult
 )
 from ._auth import Authorization
+from ._prompts import PromptRegistry
 from ._transport import MCPRequest, Method, handle_request
 
 
@@ -56,6 +58,7 @@ class MCPServer:
         allowed_origins: Collection[str] | Callable[[str], bool],
         sse_keepalive: float,
         authorization: Authorization | None,
+        prompts: PromptRegistry | None,
     ) -> None:
         if not name:
             raise ValueError("name must be a non-empty string")
@@ -83,10 +86,17 @@ class MCPServer:
         self._allowed_origins = allowed_origins
         self._authorization = authorization
         self._subscriptions: set[Subscription] = set()
-        self._methods: Mapping[str, Method] = {
+        self._methods: dict[str, Method] = {
             "server/discover": Method(self._discover),
             "subscriptions/listen": Method(self._listen, streaming=True),
         }
+        self._capabilities: ServerCapabilities = {}
+        if prompts is not None:
+            if authorization is None and prompts._scoped:
+                raise ValueError("prompts with scopes require authorization to be configured")
+            self._capabilities["prompts"] = {}
+            self._methods["prompts/list"] = Method(prompts._list)
+            self._methods["prompts/get"] = Method(prompts._get, scopes=prompts._get_scopes)
 
     def _origin_allowed(self, origin: str) -> bool:
         # https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#security-&-endpoint
@@ -115,7 +125,7 @@ class MCPServer:
         """server/discover endpoint."""
         result: DiscoverResult = {
             "supportedVersions": PROTOCOL_VERSIONS,
-            "capabilities": {},
+            "capabilities": self._capabilities,
             "ttlMs": self._discover_ttl_ms,
             "cacheScope": self._discover_cache_scope,
         }

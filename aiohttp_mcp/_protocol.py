@@ -13,6 +13,10 @@ if sys.version_info >= (3, 13):
     from typing import ReadOnly
 else:
     from typing_extensions import ReadOnly
+if sys.version_info >= (3, 12):
+    from typing import TypeAliasType
+else:
+    from typing_extensions import TypeAliasType
 
 #: Protocol revisions implemented, newest first.
 PROTOCOL_VERSIONS: Final = ("2026-07-28",)
@@ -71,6 +75,8 @@ _B64_SUFFIX: Final = "?="
 RequestId = str | int
 # https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/progress#progress-flow
 ProgressToken = str | int
+# https://modelcontextprotocol.io/specification/2026-07-28/server/prompts#promptmessage
+Role = Literal["user", "assistant"]
 
 
 # TODO(PY315): closed=True
@@ -223,6 +229,110 @@ SubscriptionsListenResultMetaObject = TypedDict(
 
 class SubscriptionsListenResult(InputResult):
     _meta: Required[ReadOnly[SubscriptionsListenResultMetaObject]]
+
+
+# TODO(PY315): closed=True
+class Annotations(TypedDict, total=False):
+    audience: Sequence[Role]
+    priority: float
+    lastModified: str
+
+
+# TODO(PY315): closed=True
+class TextContent(TypedDict):
+    type: Literal["text"]
+    text: str
+    annotations: NotRequired[Annotations]
+
+
+# TODO(PY315): closed=True
+class ImageContent(TypedDict):
+    type: Literal["image"]
+    data: str
+    mimeType: str
+    annotations: NotRequired[Annotations]
+
+
+# TODO(PY315): closed=True
+class AudioContent(TypedDict):
+    type: Literal["audio"]
+    data: str
+    mimeType: str
+    annotations: NotRequired[Annotations]
+
+
+# TODO(PY315): closed=True
+class ResourceLink(TypedDict):
+    type: Literal["resource_link"]
+    name: str
+    uri: str
+    title: NotRequired[str]
+    description: NotRequired[str]
+    mimeType: NotRequired[str]
+    icons: NotRequired[Sequence[Icon]]
+    size: NotRequired[int]
+    annotations: NotRequired[Annotations]
+
+
+# TODO(PY315): closed=True
+class TextResourceContents(TypedDict):
+    uri: str
+    text: str
+    mimeType: NotRequired[str]
+
+
+# TODO(PY315): closed=True
+class BlobResourceContents(TypedDict):
+    uri: str
+    blob: str
+    mimeType: NotRequired[str]
+
+
+# TODO(PY315): closed=True
+class EmbeddedResource(TypedDict):
+    type: Literal["resource"]
+    resource: TextResourceContents | BlobResourceContents
+    annotations: NotRequired[Annotations]
+
+
+ContentBlock = TextContent | ImageContent | AudioContent | ResourceLink | EmbeddedResource
+
+
+# TODO(PY315): closed=True
+class PromptMessage(TypedDict):
+    role: Role
+    content: ContentBlock
+
+
+# TODO(PY315): closed=True
+class PromptArgument(TypedDict):
+    name: str
+    title: NotRequired[str]
+    description: NotRequired[str]
+    required: NotRequired[bool]
+
+
+# Named ``Prompt`` in the specification schema; renamed to avoid colliding
+# with the public aiohttp_mcp.Prompt descriptor.
+# TODO(PY315): closed=True
+class PromptInfo(TypedDict):
+    name: str
+    title: NotRequired[str]
+    description: NotRequired[str]
+    arguments: NotRequired[Sequence[PromptArgument]]
+    icons: NotRequired[Sequence[Icon]]
+
+
+class ListPromptsResult(InputResult):
+    prompts: Sequence[PromptInfo]
+    nextCursor: NotRequired[str]
+    ttlMs: int
+    cacheScope: Literal["public", "private"]
+
+
+class GetPromptResult(InputResult):
+    description: NotRequired[str]
+    messages: Sequence[PromptMessage]
 
 
 class MCPError(Exception):

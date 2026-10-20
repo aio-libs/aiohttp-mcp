@@ -52,5 +52,6 @@ Table of Contents
    :name: mastertoc
    :maxdepth: 2
 
+   prompts
    authorization
    api

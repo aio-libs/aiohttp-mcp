@@ -63,7 +63,14 @@ logger = logging.getLogger("aiohttp_mcp")
 class MCPRequest:
     """An in-flight MCP request, as seen by a method handler."""
 
-    __slots__ = ("_resp", "http", "id", "meta", "method", "params")
+    __slots__ = {
+        "_resp": None,
+        "http": "The underlying :class:`aiohttp.web.Request`.",
+        "id": "The JSON-RPC request ID.",
+        "meta": "The validated ``_meta`` object of the request.",
+        "method": 'The JSON-RPC method name (e.g. ``"prompts/get"``).',
+        "params": "The request parameters, with the ``_meta`` field removed.",
+    }
 
     def __init__(
         self,
@@ -79,14 +86,6 @@ class MCPRequest:
         self.meta = meta
         self.http = http
         self._resp: EventSourceResponse | None = None
-
-    @property
-    def client_info(self) -> Implementation | None:
-        return self.meta.get(META_CLIENT_INFO)
-
-    @property
-    def client_capabilities(self) -> ClientCapabilities:
-        return self.meta[META_CLIENT_CAPABILITIES]
 
     @property
     def auth(self) -> TokenInfo | None:

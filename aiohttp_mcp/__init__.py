@@ -15,8 +15,20 @@ from ._auth_server import (
     LocalAuthorization,
     RenderConsent,
 )
+from ._content import (
+    AudioContent,
+    Content,
+    EmbeddedResource,
+    Icon,
+    ImageContent,
+    Message,
+    ResourceLink,
+    TextContent,
+)
+from ._prompts import Doc, Prompt, PromptHandler, PromptRegistry, PromptResult
 from ._protocol import PROTOCOL_VERSIONS
 from ._server import MCPServer
+from ._transport import MCPRequest
 from ._validators import IntrospectionAuthorization
 
 __version__ = "0.1.0"
@@ -31,14 +43,28 @@ TOKEN_INFO_KEY: web.RequestKey[TokenInfo]  # type: ignore[no-redef]
 __all__ = (
     "PROTOCOL_VERSIONS",
     "TOKEN_INFO_KEY",
+    "AudioContent",
     "AuthenticateRequest",
     "Authorization",
     "CheckCredentials",
     "ConsentContext",
+    "Content",
+    "Doc",
+    "EmbeddedResource",
+    "Icon",
+    "ImageContent",
     "IntrospectionAuthorization",
     "LocalAuthorization",
+    "MCPRequest",
+    "Message",
+    "Prompt",
+    "PromptHandler",
+    "PromptRegistry",
+    "PromptResult",
     "RenderConsent",
+    "ResourceLink",
     "ScopeMatcher",
+    "TextContent",
     "TokenInfo",
     "TokenValidator",
     "setup",
@@ -62,6 +88,7 @@ def setup(
     sse_keepalive: float = 15.0,
     authorization: Authorization | None = None,
     well_known_routes: bool = True,
+    prompts: PromptRegistry | None = None,
 ) -> MCPServer:
     """Serve an MCP endpoint at ``path`` on ``app``.
 
@@ -94,6 +121,7 @@ def setup(
         sub-application - those documents must be served from the origin
         root, so call :meth:`Authorization.register_well_known` on the
         root application instead.
+    :param prompts: The registry of prompts to serve. Enables the ``prompts`` capability.
     """
     if authorization is not None:
         authorization._bind(path)
@@ -117,6 +145,7 @@ def setup(
         allowed_origins=allowed_origins,
         sse_keepalive=sse_keepalive,
         authorization=authorization,
+        prompts=prompts,
     )
     app.router.add_post(path, server._handle)
     if authorization is not None:
