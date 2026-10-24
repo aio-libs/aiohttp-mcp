@@ -1,7 +1,7 @@
 """MCP (Model Context Protocol) server support for aiohttp."""
 
 from collections.abc import Callable, Collection
-from typing import Final, Literal
+from typing import Final, Literal, NoReturn
 
 from aiohttp import web
 from yarl import URL
@@ -25,8 +25,24 @@ from ._content import (
     ResourceLink,
     TextContent,
 )
+from ._elicitation import (
+    BooleanSchema,
+    ElicitResult,
+    Elicitation,
+    EnumSchema,
+    FieldSchema,
+    FormElicitation,
+    InputRequired,
+    IntegerSchema,
+    MultiSelectEnumSchema,
+    NumberSchema,
+    SecureFormElicitation,
+    StringSchema,
+    URLElicitation,
+)
 from ._prompts import Doc, Prompt, PromptHandler, PromptRegistry, PromptResult
 from ._protocol import PROTOCOL_VERSIONS
+from ._secure_form import FormContext, RenderForm
 from ._server import MCPServer
 from ._transport import MCPRequest
 from ._validators import IntrospectionAuthorization
@@ -46,27 +62,43 @@ __all__ = (
     "AudioContent",
     "AuthenticateRequest",
     "Authorization",
+    "BooleanSchema",
     "CheckCredentials",
     "ConsentContext",
     "Content",
     "Doc",
+    "ElicitResult",
+    "Elicitation",
     "EmbeddedResource",
+    "EnumSchema",
+    "FieldSchema",
+    "FormContext",
+    "FormElicitation",
     "Icon",
     "ImageContent",
+    "InputRequired",
+    "IntegerSchema",
     "IntrospectionAuthorization",
     "LocalAuthorization",
     "MCPRequest",
+    "MCPServer",
     "Message",
+    "MultiSelectEnumSchema",
+    "NumberSchema",
     "Prompt",
     "PromptHandler",
     "PromptRegistry",
     "PromptResult",
     "RenderConsent",
+    "RenderForm",
     "ResourceLink",
     "ScopeMatcher",
+    "SecureFormElicitation",
+    "StringSchema",
     "TextContent",
     "TokenInfo",
     "TokenValidator",
+    "URLElicitation",
     "setup",
 )
 
@@ -89,6 +121,9 @@ def setup(
     authorization: Authorization | None = None,
     well_known_routes: bool = True,
     prompts: PromptRegistry | None = None,
+    state_secret: bytes | None = None,
+    authenticate_request: AuthenticateRequest | None = None,
+    render_form: RenderForm | None = None,
 ) -> MCPServer:
     """Serve an MCP endpoint at ``path`` on ``app``.
 
@@ -111,7 +146,9 @@ def setup(
         (compared against the header's parsed host), or a callable receiving
         that host and replacing the policy. Defaults to the host of
         ``authorization``'s resource when authorization is configured, and to
-        ``localhost`` otherwise.
+        ``localhost`` otherwise. Behind a reverse proxy,
+        make sure the forwarded scheme and host are applied to requests
+        (e.g. with :mod:`aiohttp_remotes`) so built URLs are correct.
     :param sse_keepalive: Interval in seconds between SSE keep-alive comments
         on response streams; also bounds how quickly a client disconnect is
         detected.
@@ -122,6 +159,16 @@ def setup(
         root, so call :meth:`Authorization.register_well_known` on the
         root application instead.
     :param prompts: The registry of prompts to serve. Enables the ``prompts`` capability.
+    :param state_secret: Key used for signing when using :meth:`.MCPRequest.elicit`.
+        Random when omitted, which invalidates in-flight requests on restart and
+        breaks them across workers.
+    :param authenticate_request: Returns the authenticated browser user for a
+        request, enabling :class:`SecureFormElicitation` pages to verify who
+        opened them. Not needed with :class:`LocalAuthorization`, whose login
+        session is used by default.
+    :param render_form: Replaces the hosted secure-form page. Receives the
+        request and a :class:`FormContext`. The page it returns must satisfy
+        the form contract documented there.
     """
     if authorization is not None:
         authorization._bind(path)
@@ -146,11 +193,29 @@ def setup(
         sse_keepalive=sse_keepalive,
         authorization=authorization,
         prompts=prompts,
+        state_secret=state_secret,
     )
     app.router.add_post(path, server._handle)
     if authorization is not None:
         authorization._register_routes(app)
         if well_known_routes:
             authorization.register_well_known(app)
+
+    # Secure-form elicitation pages, when a browser identity is available.
+    form_identity = authenticate_request
+    if isinstance(authorization, LocalAuthorization):
+        if form_identity is None:
+            form_identity = authorization._subject
+        server._form_login = lambda r: authorization._login_redirect(r.rel_url)
+    if authorization is not None and form_identity is not None:
+        server._form_identity = form_identity
+        if render_form is not None:
+            server._form_render = render_form
+        resource = app.router.add_resource(f"{path}/elicit/{{ticket}}")
+        resource.add_route("GET", server._handle_form)
+        resource.add_route("POST", server._handle_form)
+        server._form_resource = resource
+        if isinstance(authorization, LocalAuthorization):
+            authorization._extra_return_prefixes.append(lambda: str(resource.url_for(ticket="")))
     app.on_shutdown.append(server._shutdown)
     return server

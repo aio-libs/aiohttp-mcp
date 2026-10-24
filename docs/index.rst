@@ -54,4 +54,5 @@ Table of Contents
 
    prompts
    authorization
+   elicitation
    api

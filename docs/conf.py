@@ -71,7 +71,9 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     # TODO(aiohttp4): Switch to /stable/
     "aiohttp": ("https://docs.aiohttp.org/en/latest/", None),
-    "aiohttp-security": ("https://aiohttp-security.readthedocs.io/en/stable/", None)
+    "aiohttp-security": ("https://aiohttp-security.readthedocs.io/en/stable/", None),
+    "aiohttp-session": ("https://aiohttp-session.readthedocs.io/en/stable/", None),
+    "aiohttp-remotes": ("https://aiohttp-remotes.readthedocs.io/en/stable/", None),
 }
 
 # -- Options for extlinks ----------------------------------------------------

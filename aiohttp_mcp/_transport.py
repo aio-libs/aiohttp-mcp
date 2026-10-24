@@ -21,9 +21,20 @@ from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
 
 from ._auth import TOKEN_INFO_KEY, TokenInfo, _AuthError
+from ._elicitation import (
+    Elicitation,
+    ElicitResult,
+    InputRequired,
+    SecureFormElicitation,
+    _input_required_result,
+    _load_request_state,
+    _parse_result,
+    _secure_form_result,
+)
 from ._protocol import (
     HEADER_MISMATCH,
     INTERNAL_ERROR,
+    INVALID_PARAMS,
     INVALID_REQUEST,
     METHOD_HDR,
     METHOD_NOT_FOUND,
@@ -64,12 +75,22 @@ class MCPRequest:
     """An in-flight MCP request, as seen by a method handler."""
 
     __slots__ = {
+        "_form_tickets": None,
+        "_input_responses": None,
+        "_request_state": None,
         "_resp": None,
+        "_responses": None,
+        "_server": None,
         "http": "The underlying :class:`aiohttp.web.Request`.",
         "id": "The JSON-RPC request ID.",
         "meta": "The validated ``_meta`` object of the request.",
         "method": 'The JSON-RPC method name (e.g. ``"prompts/get"``).',
-        "params": "The request parameters, with the ``_meta`` field removed.",
+        "params": "The request parameters, with protocol fields removed.",
+        "state": (
+            "Verified application state from a previous ``input_required``"
+            " result of this request, as passed to :class:`InputRequired`;"
+            " :data:`None` on the first attempt."
+        ),
     }
 
     def __init__(
@@ -79,18 +100,54 @@ class MCPRequest:
         params: Mapping[str, object],
         meta: RequestMeta,
         http: web.Request,
+        *,
+        server: "MCPServer",
+        input_responses: Mapping[str, object] | None = None,
+        request_state: str | None = None,
     ) -> None:
         self.method = method
         self.id = request_id
         self.params = params
         self.meta = meta
         self.http = http
+        self.state: object = None
+        self._server = server
+        self._input_responses = input_responses
+        self._request_state = request_state
+        self._responses: Mapping[str, object] = input_responses or {}
+        self._form_tickets: Mapping[str, str] = {}
         self._resp: EventSourceResponse | None = None
 
     @property
     def auth(self) -> TokenInfo | None:
         """Validated access-token information, if authorization is enabled."""
         return self.http.get(TOKEN_INFO_KEY)
+
+    async def elicit(
+        self,
+        key: str,
+        elicitation: Elicitation,
+        *,
+        state: Mapping[str, object] | None = None,
+    ) -> ElicitResult:
+        """Return the user's response to ``elicitation``, requesting it if absent.
+
+        When the response identified by ``key`` was provided, it is validated and
+        returned. Otherwise :class:`InputRequired` is raised; the client will then
+        request the input from the user and retry. Consecutive ``elicit`` calls
+        therefore accumulate one round trip at a time, with earlier responses
+        carried in the signed request state.
+
+        :param key: Identifies this elicitation within the request.
+        :param state: Application state echoed by the client and available
+            as :attr:`state` on the retry; see :class:`InputRequired`.
+        """
+        response = self._responses.get(key)
+        if response is None:
+            raise InputRequired({key: elicitation}, state=state)
+        if isinstance(elicitation, SecureFormElicitation):
+            return await _secure_form_result(self, key, elicitation, response, state)
+        return _parse_result(key, response, elicitation)
 
     async def _emit(self, message: JSONRPCNotification) -> None:
         if self._resp is None:
@@ -113,6 +170,7 @@ class Method:
     handler: Handler
     streaming: bool = False
     scopes: Scopes = ()
+    input_required: bool = False
 
 
 async def _resolve_scopes(
@@ -211,7 +269,23 @@ async def _serve_request(server: MCPServer, request: web.Request) -> web.StreamR
         method = server._methods.get(message["method"])
         if method is None:
             raise MCPError(METHOD_NOT_FOUND, f"Unknown method {message['method']!r}")
-        ctx = MCPRequest(message["method"], request_id, params, meta, request)
+
+        input_responses = params.pop("inputResponses", None)
+        request_state = params.pop("requestState", None)
+        if input_responses is not None and not isinstance(input_responses, dict):
+            raise MCPError(INVALID_PARAMS, "inputResponses must be an object")
+        if request_state is not None and not isinstance(request_state, str):
+            raise MCPError(INVALID_PARAMS, "requestState must be a string")
+        ctx = MCPRequest(
+            message["method"],
+            request_id,
+            params,
+            meta,
+            request,
+            server=server,
+            input_responses=input_responses,
+            request_state=request_state,
+        )
         try:
             scopes, scopes_gen = await _resolve_scopes(method, ctx)
         except Exception:
@@ -241,10 +315,13 @@ async def _serve_request(server: MCPServer, request: web.Request) -> web.StreamR
     assert ctx is not None and method is not None  # Errors were handled above
 
     try:
+        if method.input_required:
+            # Needs the authenticated principal, so cannot happen earlier.
+            _load_request_state(server._state_signer, ctx)
         if method.streaming:
-            response = await _streaming_request(server, ctx, method.handler)
+            response = await _streaming_request(server, ctx, method)
         else:
-            response = await _basic_request(server, ctx, method.handler)
+            response = await _basic_request(server, ctx, method)
     except BaseException as exc:
         if scopes_gen is not None:
             await _unwind_scopes(scopes_gen, exc)
@@ -324,10 +401,13 @@ def _validate_headers(
 
 
 async def _basic_request(
-    server: MCPServer, ctx: MCPRequest, handler: Handler
+    server: MCPServer, ctx: MCPRequest, method: Method
 ) -> web.StreamResponse:
     """A plain request/response method call (no SSE)."""
-    result = await handler(ctx)
+    try:
+        result = await method.handler(ctx)
+    except InputRequired as exc:
+        result = _input_required_result(ctx, method.input_required, exc)
     envelope: JSONRPCResultResponse = {
         "jsonrpc": "2.0",
         "id": ctx.id,
@@ -337,7 +417,7 @@ async def _basic_request(
 
 
 async def _streaming_request(
-    server: MCPServer, ctx: MCPRequest, handler: Handler
+    server: MCPServer, ctx: MCPRequest, method: Method
 ) -> web.StreamResponse:
     async with sse_response(
         ctx.http,
@@ -345,7 +425,7 @@ async def _streaming_request(
         allow_all_methods=True,
     ) as resp:
         ctx._resp = resp
-        task = asyncio.create_task(handler(ctx))
+        task = asyncio.create_task(method.handler(ctx))
 
         try:
             # While task not done.
@@ -364,6 +444,17 @@ async def _streaming_request(
         envelope: JSONRPCResultResponse | JSONRPCErrorResponse
         try:
             result = task.result()
+        except InputRequired as mrtr:
+            try:
+                result = _input_required_result(ctx, method.input_required, mrtr)
+            except MCPError as exc:
+                envelope = error_envelope(exc, ctx.id)
+            else:
+                envelope = {
+                    "jsonrpc": "2.0",
+                    "id": ctx.id,
+                    "result": _finalize_result(server, result),
+                }
         except MCPError as exc:
             envelope = error_envelope(exc, ctx.id)
         except ConnectionError:

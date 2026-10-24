@@ -4,9 +4,10 @@ The logic for an MCP server, sans-IO.
 """
 
 import asyncio
+import secrets
 from collections.abc import Callable, Collection, Mapping
 from ipaddress import ip_address
-from typing import Literal
+from typing import Literal, NoReturn
 
 from aiohttp import web
 from yarl import URL
@@ -25,7 +26,10 @@ from ._protocol import (
     SubscriptionsListenResult
 )
 from ._auth import Authorization
+from ._auth_server import AuthenticateRequest, _Signer
+from ._elicitation import _PendingForm
 from ._prompts import PromptRegistry
+from ._secure_form import RenderForm, handle_form, render_form_default
 from ._transport import MCPRequest, Method, handle_request
 
 
@@ -59,6 +63,7 @@ class MCPServer:
         sse_keepalive: float,
         authorization: Authorization | None,
         prompts: PromptRegistry | None,
+        state_secret: bytes | None,
     ) -> None:
         if not name:
             raise ValueError("name must be a non-empty string")
@@ -85,7 +90,18 @@ class MCPServer:
         self._discover_cache_scope = discover_cache_scope
         self._allowed_origins = allowed_origins
         self._authorization = authorization
+        # Signs multi round-trip request state (elicitation).
+        self._state_signer = _Signer(
+            state_secret if state_secret is not None else secrets.token_bytes(32)
+        )
         self._subscriptions: set[Subscription] = set()
+        # Secure-form elicitations
+        self._forms: dict[str, _PendingForm] = {}
+        self._form_expiries: list[tuple[float, str]] = []
+        self._form_identity: AuthenticateRequest | None = None
+        self._form_login: Callable[[web.Request], NoReturn] | None = None
+        self._form_render: RenderForm = render_form_default
+        self._form_resource: web.Resource | None = None
         self._methods: dict[str, Method] = {
             "server/discover": Method(self._discover),
             "subscriptions/listen": Method(self._listen, streaming=True),
@@ -96,7 +112,23 @@ class MCPServer:
                 raise ValueError("prompts with scopes require authorization to be configured")
             self._capabilities["prompts"] = {}
             self._methods["prompts/list"] = Method(prompts._list)
-            self._methods["prompts/get"] = Method(prompts._get, scopes=prompts._get_scopes)
+            self._methods["prompts/get"] = Method(
+                prompts._get, scopes=prompts._get_scopes, input_required=True
+            )
+
+    def host_allowed(self, host: str | None) -> bool:
+        """Whether ``host`` is one this server is legitimately addressed as.
+
+        The ``allowed_origins`` policy from :func:`~aiohttp_mcp.setup`.
+        Application handlers should check this before building an absolute
+        URL on the request's origin - the ``Host`` header behind
+        :attr:`~aiohttp.web.BaseRequest.url` is client-controlled.
+        """
+        if host is None:
+            return False
+        if callable(self._allowed_origins):
+            return self._allowed_origins(host)
+        return host in self._allowed_origins
 
     def _origin_allowed(self, origin: str) -> bool:
         # https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#security-&-endpoint
@@ -106,16 +138,15 @@ class MCPServer:
             host = URL(origin).host
         except ValueError:
             return False
-
-        if host is None:
-            return False
-        if callable(self._allowed_origins):
-            return self._allowed_origins(host)
-        return host in self._allowed_origins
+        return self.host_allowed(host)
 
     async def _handle(self, request: web.Request) -> web.StreamResponse:
         """The MCP endpoint."""
         return await handle_request(self, request)
+
+    async def _handle_form(self, request: web.Request) -> web.StreamResponse:
+        """A secure-form elicitation page (GET renders, POST submits)."""
+        return await handle_form(self, request)
 
     async def _shutdown(self, app: web.Application) -> None:
         for subscription in self._subscriptions:

@@ -23,6 +23,7 @@ def request_body(
     params: dict[str, object] | None = None,
     *,
     request_id: RequestId = 1,
+    capabilities: dict[str, object] | None = None,
 ) -> JSONRPCRequest:
     """A fully valid request envelope; deviation tests mutate the result."""
     return {
@@ -31,7 +32,10 @@ def request_body(
         "method": method,
         "params": {
             **(params or {}),
-            "_meta": {META_VERSION: PROTOCOL_VERSION, META_CAPABILITIES: {}},
+            "_meta": {
+                META_VERSION: PROTOCOL_VERSION,
+                META_CAPABILITIES: capabilities if capabilities is not None else {},
+            },
         },
     }
 

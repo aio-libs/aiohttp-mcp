@@ -61,6 +61,48 @@ Simple handlers can return a single :class:`str` which will be converted to a
 
 .. autoclass:: aiohttp_mcp.Message
 
+Elicitation
+===========
+
+.. autoclass:: aiohttp_mcp.Elicitation()
+
+.. autoclass:: aiohttp_mcp.FormElicitation
+
+.. autoclass:: aiohttp_mcp.URLElicitation
+
+.. autoclass:: aiohttp_mcp.SecureFormElicitation
+
+.. autotype:: RenderForm
+
+   Replaces the hosted secure-form page; see :func:`~aiohttp_mcp.setup`'s
+   ``render_form``. The returned page must satisfy the contract documented
+   on :class:`FormContext`.
+
+.. autoclass:: aiohttp_mcp.FormContext()
+
+.. autoclass:: aiohttp_mcp.ElicitResult()
+
+.. autoclass:: aiohttp_mcp.InputRequired
+
+.. _aiohttp-mcp-field-schemas:
+
+Form fields
++++++++++++
+
+.. autoclass:: aiohttp_mcp.FieldSchema()
+
+.. autoclass:: aiohttp_mcp.StringSchema
+
+.. autoclass:: aiohttp_mcp.IntegerSchema
+
+.. autoclass:: aiohttp_mcp.NumberSchema
+
+.. autoclass:: aiohttp_mcp.BooleanSchema
+
+.. autoclass:: aiohttp_mcp.EnumSchema
+
+.. autoclass:: aiohttp_mcp.MultiSelectEnumSchema
+
 Common types
 ============
 

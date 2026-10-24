@@ -299,7 +299,8 @@ class LocalAuthorization(Authorization):
         :func:`~aiohttp_mcp.setup`; register the well-known documents via
         :meth:`register_well_known` on the root application.
     :param secret: Key signing tokens and authorization codes. Random when
-        omitted, which invalidates tokens on restart.
+        omitted, which invalidates tokens on restart. Can be the same secret
+        passed as ``state_secret`` to :func:`~aiohttp_mcp.setup`.
     :param clients: Statically registered clients, mapping ``client_id`` to
         its exact ``redirect_uris``. Clients using Client ID Metadata
         Documents (an ``https`` ``client_id`` URL) need no registration.
@@ -394,6 +395,9 @@ class LocalAuthorization(Authorization):
         self._login_url = login_url
         self._login_redirect_param = login_redirect_param
         self._login_ttl = login_ttl
+        # Relative paths the login page may redirect back to.
+        self._return_prefixes: tuple[str, ...] = ()
+        self._extra_return_prefixes: list[Callable[[], str]] = []
         self._signer = _Signer(secret if secret is not None else secrets.token_bytes(32))
         self._grantable_scopes = (
             tuple(grantable_scopes) if grantable_scopes else tuple(default_scopes)
@@ -445,8 +449,14 @@ class LocalAuthorization(Authorization):
             oauth.router.add_get("/login", self._handle_login_page, name="login")
             oauth.router.add_post("/login", self._handle_login_submit)
         oauth.cleanup_ctx.append(self._client_session)
+        oauth.on_startup.append(self._finalise_return_prefixes)
         app.add_subapp(_OAUTH_PATH, oauth)
         self._oauth_app = oauth
+
+    async def _finalise_return_prefixes(self, app: web.Application) -> None:
+        self._return_prefixes = (
+            self._endpoint_path("authorize"), *(r() for r in self._extra_return_prefixes)
+        )
 
     def _endpoint_path(self, name: str) -> str:
         """The real mounted path of one of our endpoints, from the router."""
@@ -722,7 +732,7 @@ class LocalAuthorization(Authorization):
     def _safe_return_url(self, value: str | None) -> str:
         if value is not None:
             url = URL(value)
-            if not url.is_absolute() and url.path == self._endpoint_path("authorize"):
+            if not url.is_absolute() and url.path.startswith(self._return_prefixes):
                 return str(url)
         return "/"
 

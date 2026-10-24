@@ -335,6 +335,113 @@ class GetPromptResult(InputResult):
     messages: Sequence[PromptMessage]
 
 
+# TODO(PY315): closed=True
+class _SchemaCommon(TypedDict, total=False):
+    title: str
+    description: str
+
+
+class StringSchema(_SchemaCommon, total=False):
+    type: Required[Literal["string"]]
+    minLength: int
+    maxLength: int
+    format: Literal["uri", "email", "date", "date-time"]
+    default: str
+
+
+class NumberSchema(_SchemaCommon, total=False):
+    type: Required[Literal["number", "integer"]]
+    minimum: float
+    maximum: float
+    default: float
+
+
+class BooleanSchema(_SchemaCommon, total=False):
+    type: Required[Literal["boolean"]]
+    default: bool
+
+
+class UntitledSingleSelectEnumSchema(_SchemaCommon, total=False):
+    type: Required[Literal["string"]]
+    enum: Required[Sequence[str]]
+    default: str
+
+
+class _Enum(TypedDict):
+    const: str
+    title: str
+
+
+class TitledSingleSelectEnumSchema(_SchemaCommon, total=False):
+    type: Required[Literal["string"]]
+    oneOf: Required[Sequence[_Enum]]
+    default: str
+
+
+class _Item(TypedDict):
+    type: Literal["string"]
+    enum: Sequence[str]
+
+
+class UntitledMultiSelectEnumSchema(_SchemaCommon, total=False):
+    type: Required[Literal["array"]]
+    minItems: int
+    maxItems: int
+    items: Required[_Item]
+    default: Sequence[str]
+
+
+class _AnyOfEnums(TypedDict):
+    anyOf: Sequence[_Enum]
+
+
+class TitledMultiSelectEnumSchema(_SchemaCommon, total=False):
+    type: Required[Literal["array"]]
+    minItems: int
+    maxItems: int
+    items: Required[_AnyOfEnums]
+    default: Sequence[str]
+
+
+SingleSelectEnumSchema = UntitledSingleSelectEnumSchema | TitledSingleSelectEnumSchema
+MultiSelectEnumSchema = UntitledMultiSelectEnumSchema | TitledMultiSelectEnumSchema
+EnumSchema = SingleSelectEnumSchema | MultiSelectEnumSchema
+PrimitiveSchemaDefinition = StringSchema | NumberSchema | BooleanSchema | EnumSchema
+
+
+_RequestedSchema = TypedDict("_RequestedSchema", {
+    "$schema": NotRequired[str],
+    "type": Literal["object"],
+    "properties": Mapping[str, PrimitiveSchemaDefinition],
+    "required": NotRequired[Sequence[str]]
+})
+
+
+# TODO(PY315): closed=True
+class ElicitRequestFormParams(TypedDict):
+    mode: Literal["form"]
+    message: str
+    requestedSchema: _RequestedSchema
+
+
+# TODO(PY315): closed=True
+class ElicitRequestURLParams(TypedDict):
+    mode: Literal["url"]
+    message: str
+    url: str
+
+
+# TODO(PY315): closed=True
+class ElicitRequest(TypedDict):
+    method: Literal["elicitation/create"]
+    params: ElicitRequestFormParams | ElicitRequestURLParams
+
+
+class InputRequiredResult(InputResult):
+    inputRequests: NotRequired[Mapping[str, ElicitRequest]]
+    requestState: NotRequired[str]
+
+
 class MCPError(Exception):
     """A JSON-RPC error response to be sent to the client."""
 
