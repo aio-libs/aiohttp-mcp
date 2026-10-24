@@ -39,6 +39,7 @@ CheckCredentials = TypeAliasType("CheckCredentials", Callable[[str, str], Awaita
 _CIMD_TIMEOUT: Final = ClientTimeout(total=10)
 _CIMD_MAX_SIZE: Final = 64 * 1024
 _CIMD_CACHE_TTL: Final = 300.0
+_CIMD_CACHE_MAX: Final = 16
 _SESSION_COOKIE: Final = "aiohttp_mcp_session"
 # Our endpoints all live under this prefix; the session cookie is scoped to it.
 _OAUTH_PATH: Final = "/oauth2"
@@ -534,7 +535,12 @@ class LocalAuthorization(Authorization):
             raise _PageError("Invalid client metadata document")
         name = doc.get("client_name")
         client = _Client(tuple(redirect_uris), name if isinstance(name, str) else client_id)
-        self._cimd_cache[client_id] = (time.monotonic() + _CIMD_CACHE_TTL, client)
+        now = time.monotonic()
+        for stale in [c for c, (expiry, _) in self._cimd_cache.items() if expiry <= now]:
+            del self._cimd_cache[stale]
+        while len(self._cimd_cache) >= _CIMD_CACHE_MAX:
+            del self._cimd_cache[min(self._cimd_cache, key=lambda c: self._cimd_cache[c][0])]
+        self._cimd_cache[client_id] = (now + _CIMD_CACHE_TTL, client)
         return client
 
     # - Authorization endpoint ----------------------------------------------

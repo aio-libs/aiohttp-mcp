@@ -639,6 +639,26 @@ async def test_cimd_client(aiohttp_client: AiohttpClient, allow_local_cimd: None
         assert resp.status == 200
 
 
+async def test_cimd_cache_bounded(aiohttp_client: AiohttpClient, allow_local_cimd: None) -> None:
+    async def metadata(request: web.Request) -> web.Response:
+        cid = f"http://127.0.0.1:{client.port}/client/{request.match_info['n']}"
+        return web.json_response({"client_id": cid, "redirect_uris": [REDIRECT_URI]})
+
+    app = web.Application()
+    app.router.add_get("/client/{n}", metadata)
+    authorization = make_auth()
+    setup(app, name="test-server", authorization=authorization)
+    client = await aiohttp_client(app)
+
+    client_ids = [f"http://127.0.0.1:{client.port}/client/{n}" for n in range(3)]
+    with mock.patch("aiohttp_mcp._auth_server._CIMD_CACHE_MAX", 2):
+        for client_id in client_ids:
+            await authorization._resolve_client(client_id)
+    assert len(authorization._cimd_cache) == 2
+    assert client_ids[0] not in authorization._cimd_cache  # Oldest evicted.
+    assert client_ids[2] in authorization._cimd_cache
+
+
 # - Token endpoint --------------------------------------------------------------
 
 
