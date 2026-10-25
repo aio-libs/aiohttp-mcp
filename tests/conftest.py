@@ -10,14 +10,22 @@ import aiohttp_mcp
 
 
 @pytest.fixture
-def make_client(aiohttp_client: AiohttpClient) -> MakeClient:
+def mcp_servers() -> list[aiohttp_mcp.MCPServer]:
+    """The servers created by ``make_client``, in creation order."""
+    return []
+
+
+@pytest.fixture
+def make_client(
+    aiohttp_client: AiohttpClient, mcp_servers: list[aiohttp_mcp.MCPServer]
+) -> MakeClient:
     """Create a ``TestClient`` for an app with one MCP endpoint on it."""
 
     async def maker(**kwargs: Any) -> TestClient[web.Request, web.Application]:
         kwargs.setdefault("name", "test-server")
         kwargs.setdefault("version", "1.2.3")
         app = web.Application()
-        aiohttp_mcp.setup(app, **kwargs)
+        mcp_servers.append(aiohttp_mcp.setup(app, **kwargs))
         return await aiohttp_client(app)
 
     return maker

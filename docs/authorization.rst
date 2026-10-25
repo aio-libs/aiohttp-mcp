@@ -1,5 +1,3 @@
-.. _aiohttp-mcp-authorization:
-
 =============
 Authorization
 =============

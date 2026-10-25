@@ -1,5 +1,3 @@
-.. _aiohttp-mcp-prompts:
-
 =======
 Prompts
 =======
@@ -64,7 +62,7 @@ wrap content in :class:`~aiohttp_mcp.Message` to set the role:
 Authorization
 =============
 
-When :ref:`authorization <aiohttp-mcp-authorization>` is configured, a prompt
+When :doc:`authorization <authorization>` is configured, a prompt
 can be restricted to callers holding specific scopes. Restricted prompts are
 omitted from prompt listing for clients lacking the scopes:
 

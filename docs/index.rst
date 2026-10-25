@@ -53,6 +53,7 @@ Table of Contents
    :maxdepth: 2
 
    prompts
+   resources
    authorization
    elicitation
    api

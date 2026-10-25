@@ -335,6 +335,51 @@ class GetPromptResult(InputResult):
     messages: Sequence[PromptMessage]
 
 
+# Named ``Resource`` in the specification schema.
+# TODO(PY315): closed=True
+class ResourceInfo(TypedDict):
+    uri: str
+    name: str
+    title: NotRequired[str]
+    description: NotRequired[str]
+    mimeType: NotRequired[str]
+    size: NotRequired[int]
+    icons: NotRequired[Sequence[Icon]]
+    annotations: NotRequired[Annotations]
+
+
+# Named ``ResourceTemplate`` in the specification schema.
+# TODO(PY315): closed=True
+class ResourceTemplateInfo(TypedDict):
+    uriTemplate: str
+    name: str
+    title: NotRequired[str]
+    description: NotRequired[str]
+    mimeType: NotRequired[str]
+    icons: NotRequired[Sequence[Icon]]
+    annotations: NotRequired[Annotations]
+
+
+class ListResourcesResult(InputResult):
+    resources: Sequence[ResourceInfo]
+    nextCursor: NotRequired[str]
+    ttlMs: int
+    cacheScope: Literal["public", "private"]
+
+
+class ListResourceTemplatesResult(InputResult):
+    resourceTemplates: Sequence[ResourceTemplateInfo]
+    nextCursor: NotRequired[str]
+    ttlMs: int
+    cacheScope: Literal["public", "private"]
+
+
+class ReadResourceResult(InputResult):
+    contents: Sequence[TextResourceContents | BlobResourceContents]
+    ttlMs: int
+    cacheScope: Literal["public", "private"]
+
+
 # TODO(PY315): closed=True
 class _SchemaCommon(TypedDict, total=False):
     title: str

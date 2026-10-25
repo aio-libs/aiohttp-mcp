@@ -1,5 +1,3 @@
-.. _aiohttp-mcp-api-reference:
-
 =============
 API Reference
 =============
@@ -60,6 +58,24 @@ Simple handlers can return a single :class:`str` which will be converted to a
 .. autoclass:: aiohttp_mcp.EmbeddedResource
 
 .. autoclass:: aiohttp_mcp.Message
+
+Resources
+=========
+
+.. autoclass:: aiohttp_mcp.ResourceRegistry
+
+.. autoclass:: aiohttp_mcp.Resource
+
+.. autoclass:: aiohttp_mcp.ResourceContents
+
+.. autotype:: ResourceHandler
+
+   A resource function. URI template variables arrive as keyword arguments;
+   an optional first parameter annotated :class:`MCPRequest` receives the
+   in-flight request.
+
+.. autotype:: ResourceResult
+
 
 Elicitation
 ===========

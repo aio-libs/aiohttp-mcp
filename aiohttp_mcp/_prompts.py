@@ -1,10 +1,9 @@
 """Prompt templates."""
 
-import inspect
 import sys
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Annotated, Literal, get_args, get_origin, get_type_hints
+from typing import Literal
 
 if sys.version_info >= (3, 12):
     from typing import TypeAliasType
@@ -12,6 +11,7 @@ else:
     from typing_extensions import TypeAliasType
 
 from ._content import Content, Icon, Message, TextContent
+from ._handlers import _apply_details, _derive_name, _inspect_handler
 from ._protocol import (
     INVALID_PARAMS,
     GetPromptResult,
@@ -27,18 +27,6 @@ from ._transport import MCPRequest
 # TODO(PY312): use the `type` statement.
 PromptResult = TypeAliasType("PromptResult", str | Sequence[Content | Message])
 PromptHandler = TypeAliasType("PromptHandler", Callable[..., Awaitable[PromptResult]])
-
-
-@dataclass(frozen=True, slots=True)
-class Doc:
-    """Documents a prompt argument.
-
-    Used inside :data:`~typing.Annotated` metadata::
-
-        code: Annotated[str, Doc("The code to review")]
-    """
-
-    documentation: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,57 +68,30 @@ class _PromptSpec:
 
 def _build_spec(prompt: Prompt) -> _PromptSpec:
     fn = prompt.handler
-    name = prompt.name or getattr(fn, "__name__", "")
-    if not name:
-        raise ValueError(f"cannot derive a name for prompt handler {fn!r}")
-    hints = get_type_hints(fn, include_extras=True)
-    wants_request = False
+    name = _derive_name(fn, prompt.name, "prompt")
+    wants_request, parameters = _inspect_handler(fn, name=name, kind="prompt")
+
     arguments: list[PromptArgument] = []
     required = set()
-    known = set()
-    for index, parameter in enumerate(inspect.signature(fn).parameters.values()):
-        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
-            raise ValueError(f"prompt {name!r} must not use *args/**kwargs")
-        hint = hints.get(parameter.name)
-        description = None
-        if get_origin(hint) is Annotated:
-            hint, *metadata = get_args(hint)
-            description = next((m.documentation for m in metadata if isinstance(m, Doc)), None)
-        if index == 0 and hint is MCPRequest:
-            wants_request = True
-            continue
-        if parameter.kind is parameter.POSITIONAL_ONLY:
-            raise ValueError(
-                f"prompt argument {parameter.name!r} of {name!r} must be"
-                " addressable by keyword"
-            )
-        if hint not in {None, str}:
-            raise ValueError(f"prompt argument {parameter.name!r} of {name!r} must be a str")
+    for parameter in parameters:
         argument: PromptArgument = {"name": parameter.name}
-        if description is not None:
-            argument["description"] = description
-        if parameter.default is parameter.empty:
+        if parameter.documentation is not None:
+            argument["description"] = parameter.documentation
+        if parameter.required:
             argument["required"] = True
             required.add(parameter.name)
-        known.add(parameter.name)
         arguments.append(argument)
 
-    summary, _, body = (inspect.getdoc(fn) or "").partition("\n")
     info: PromptInfo = {"name": name}
-    if title := prompt.title or summary.strip():
-        info["title"] = title
-    if description := prompt.description or body.strip():
-        info["description"] = description
+    _apply_details(info, prompt)
     if arguments:
         info["arguments"] = arguments
-    if prompt.icons is not None:
-        info["icons"] = tuple(icon._to_wire() for icon in prompt.icons)
     return _PromptSpec(
         info=info,
         handler=fn,
         wants_request=wants_request,
         required=frozenset(required),
-        known=frozenset(known),
+        known=frozenset(p.name for p in parameters),
         scopes=frozenset(prompt.scopes),
     )
 

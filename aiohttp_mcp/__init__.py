@@ -40,8 +40,16 @@ from ._elicitation import (
     StringSchema,
     URLElicitation,
 )
-from ._prompts import Doc, Prompt, PromptHandler, PromptRegistry, PromptResult
+from ._handlers import Doc
+from ._prompts import Prompt, PromptHandler, PromptRegistry, PromptResult
 from ._protocol import PROTOCOL_VERSIONS
+from ._resources import (
+    Resource,
+    ResourceContents,
+    ResourceHandler,
+    ResourceRegistry,
+    ResourceResult,
+)
 from ._secure_form import FormContext, RenderForm
 from ._server import MCPServer
 from ._transport import MCPRequest
@@ -91,7 +99,12 @@ __all__ = (
     "PromptResult",
     "RenderConsent",
     "RenderForm",
+    "Resource",
+    "ResourceContents",
+    "ResourceHandler",
     "ResourceLink",
+    "ResourceRegistry",
+    "ResourceResult",
     "ScopeMatcher",
     "SecureFormElicitation",
     "StringSchema",
@@ -121,6 +134,7 @@ def setup(
     authorization: Authorization | None = None,
     well_known_routes: bool = True,
     prompts: PromptRegistry | None = None,
+    resources: ResourceRegistry | None = None,
     state_secret: bytes | None = None,
     authenticate_request: AuthenticateRequest | None = None,
     render_form: RenderForm | None = None,
@@ -159,6 +173,9 @@ def setup(
         root, so call :meth:`Authorization.register_well_known` on the
         root application instead.
     :param prompts: The registry of prompts to serve. Enables the ``prompts`` capability.
+    :param resources: The registry of resources to serve. Enables the
+        ``resources`` capability, including per-resource update notifications
+        via :meth:`.MCPServer.resource_updated`.
     :param state_secret: Key used for signing when using :meth:`.MCPRequest.elicit`.
         Random when omitted, which invalidates in-flight requests on restart and
         breaks them across workers.
@@ -193,6 +210,7 @@ def setup(
         sse_keepalive=sse_keepalive,
         authorization=authorization,
         prompts=prompts,
+        resources=resources,
         state_secret=state_secret,
     )
     app.router.add_post(path, server._handle)

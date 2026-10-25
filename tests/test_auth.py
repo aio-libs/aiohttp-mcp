@@ -2,8 +2,9 @@
 
 import functools
 import re
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 
 import pytest
 from _helpers import MakeClient, next_sse_data, request_body, request_headers
@@ -12,7 +13,15 @@ from aiohttp.test_utils import TestClient
 from multidict import CIMultiDict, MultiDict
 from pytest_aiohttp import AiohttpClient
 
-from aiohttp_mcp import Authorization, TokenInfo, setup
+from aiohttp_mcp import (
+    Authorization,
+    Prompt,
+    PromptRegistry,
+    Resource,
+    ResourceRegistry,
+    TokenInfo,
+    setup,
+)
 from aiohttp_mcp._protocol import InputResult
 from aiohttp_mcp._transport import MCPRequest, Method
 
@@ -514,3 +523,113 @@ async def test_scopes_generator_yields_twice(aiohttp_client: AiohttpClient) -> N
     async with post(client, "test/write-pr", {"org": "aio-libs"}, token="org-token") as resp:
         assert resp.status == 500
     assert events[-1] == "release"
+
+
+# - Scope-restricted feature items (prompts and resources) --------------------
+
+
+async def open_item() -> str:
+    return "open"
+
+
+async def secret_item() -> str:
+    return "secret"
+
+
+async def secret_template(path: str) -> str:
+    return path
+
+
+@dataclass(frozen=True)
+class ScopedFeature:
+    """A feature registry with one open item and ``mcp:write``-scoped items."""
+
+    kwargs: "Callable[[], dict[str, object]]"
+    # List methods: (method, result key, names visible to weak/good tokens).
+    lists: "tuple[tuple[str, str, list[str], list[str]], ...]"
+    # Calls hitting a scoped item: (method, params, Mcp-Name header value).
+    calls: "tuple[tuple[str, dict[str, object], str], ...]"
+
+
+FEATURES = {
+    "prompts": ScopedFeature(
+        kwargs=lambda: {
+            "prompts": PromptRegistry(
+                open_item, Prompt(secret_item, scopes=("mcp:write",))
+            )
+        },
+        lists=(
+            ("prompts/list", "prompts", ["open_item"], ["open_item", "secret_item"]),
+        ),
+        calls=(("prompts/get", {"name": "secret_item"}, "secret_item"),),
+    ),
+    "resources": ScopedFeature(
+        kwargs=lambda: {
+            "resources": ResourceRegistry(
+                Resource(open_item, "docs://open"),
+                Resource(secret_item, "docs://secret", scopes=("mcp:write",)),
+                Resource(secret_template, "files://{+path}", scopes=("mcp:write",)),
+            )
+        },
+        lists=(
+            (
+                "resources/list",
+                "resources",
+                ["open_item"],
+                ["open_item", "secret_item"],
+            ),
+            ("resources/templates/list", "resourceTemplates", [], ["secret_template"]),
+        ),
+        calls=(
+            ("resources/read", {"uri": "docs://secret"}, "docs://secret"),
+            # The scopes of a template apply to every URI it matches.
+            ("resources/read", {"uri": "files://a/b"}, "files://a/b"),
+        ),
+    ),
+}
+scoped_features = pytest.mark.parametrize("feature", FEATURES.values(), ids=FEATURES.keys())
+
+
+@scoped_features
+async def test_scoped_items_hidden_from_lists(
+    make_client: MakeClient, feature: ScopedFeature
+) -> None:
+    client = await make_client(
+        authorization=make_auth(default_scopes=("mcp:read",)), **feature.kwargs()
+    )
+    for method, key, weak_names, good_names in feature.lists:
+        for token, expected in (("weak-token", weak_names), ("good-token", good_names)):
+            async with post(client, method, token=token) as resp:
+                assert resp.status == 200
+                body = await resp.json()
+            assert [item["name"] for item in body["result"][key]] == expected
+
+
+@scoped_features
+async def test_scoped_items_challenge(
+    make_client: MakeClient, feature: ScopedFeature
+) -> None:
+    client = await make_client(
+        authorization=make_auth(default_scopes=("mcp:read",)), **feature.kwargs()
+    )
+    for method, params, name in feature.calls:
+        headers = {"Mcp-Name": name}
+        async with post(
+            client, method, dict(params), token="weak-token", headers=headers
+        ) as resp:
+            assert resp.status == 403
+            challenge = challenge_params(resp)
+        assert challenge["error"] == "insufficient_scope"
+        assert "mcp:write" in challenge["scope"]
+        async with post(
+            client, method, dict(params), token="good-token", headers=headers
+        ) as resp:
+            assert resp.status == 200
+
+
+@scoped_features
+async def test_scoped_items_require_authorization(
+    make_client: MakeClient, feature: ScopedFeature
+) -> None:
+    with pytest.raises(ValueError, match="require authorization"):
+        await make_client(**feature.kwargs())

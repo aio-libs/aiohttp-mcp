@@ -1,4 +1,3 @@
-import functools
 from contextlib import AbstractAsyncContextManager
 from typing import Annotated, Any
 
@@ -8,7 +7,6 @@ from aiohttp.test_utils import TestClient
 
 from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import (
-    Authorization,
     Content,
     Doc,
     Icon,
@@ -18,7 +16,6 @@ from aiohttp_mcp import (
     Prompt,
     PromptRegistry,
     TextContent,
-    TokenInfo,
 )
 
 
@@ -349,62 +346,3 @@ async def test_unannotated_first_param_is_an_argument(make_client: MakeClient) -
     assert result["messages"][0]["content"]["text"] == "a/b"
 
 
-# - Scope-restricted prompts ------------------------------------------------
-
-TOKENS = {
-    "admin-token": TokenInfo(scopes=frozenset({"mcp:read", "mcp:admin"})),
-    "reader-token": TokenInfo(scopes=frozenset({"mcp:read"})),
-}
-
-
-async def validator(token: str, request: web.Request) -> TokenInfo | None:
-    return TOKENS.get(token)
-
-
-make_scoped_auth = functools.partial(
-    Authorization,
-    validator,
-    resource="https://mcp.server.test",
-    auth_servers=("https://auth.server.test",),
-    default_scopes=("mcp:read",),
-)
-
-
-async def test_scoped_prompt_hidden_from_list(make_client: MakeClient) -> None:
-    client = await make_client(
-        authorization=make_scoped_auth(),
-        prompts=PromptRegistry(plain, Prompt(code_review, scopes=("mcp:admin",))),
-    )
-    async with post(client, "prompts/list", token="reader-token") as resp:
-        names = [p["name"] for p in (await result_of(resp))["prompts"]]
-    assert names == ["plain"]
-    async with post(client, "prompts/list", token="admin-token") as resp:
-        names = [p["name"] for p in (await result_of(resp))["prompts"]]
-    assert names == ["plain", "code_review"]
-
-
-async def test_scoped_prompt_get_challenges(make_client: MakeClient) -> None:
-    client = await make_client(
-        authorization=make_scoped_auth(),
-        prompts=PromptRegistry(Prompt(code_review, scopes=("mcp:admin",))),
-    )
-    async with get_prompt(client, "code_review", {"code": "x"}, token="reader-token") as resp:
-        assert resp.status == 403
-        challenge = resp.headers["WWW-Authenticate"]
-    assert 'error="insufficient_scope"' in challenge
-    assert "mcp:admin" in challenge
-
-    async with get_prompt(client, "code_review", {"code": "x"}, token="admin-token") as resp:
-        assert resp.status == 200
-
-
-async def test_scoped_prompts_require_auth(make_client: MakeClient) -> None:
-    registry = PromptRegistry(plain, Prompt(code_review, scopes=("mcp:admin",)))
-    with pytest.raises(ValueError, match="require authorization"):
-        await make_client(prompts=registry)
-
-    # The same registry is fine on an endpoint that has auth.
-    client = await make_client(authorization=make_scoped_auth(), prompts=registry)
-    async with post(client, "prompts/list", token="reader-token") as resp:
-        names = [p["name"] for p in (await result_of(resp))["prompts"]]
-    assert names == ["plain"]

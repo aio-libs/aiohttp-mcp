@@ -29,6 +29,7 @@ from ._auth import Authorization
 from ._auth_server import AuthenticateRequest, _Signer
 from ._elicitation import _PendingForm
 from ._prompts import PromptRegistry
+from ._resources import ResourceRegistry
 from ._secure_form import RenderForm, handle_form, render_form_default
 from ._transport import MCPRequest, Method, handle_request
 
@@ -36,12 +37,19 @@ from ._transport import MCPRequest, Method, handle_request
 class Subscription:
     """A live ``subscriptions/listen`` stream."""
 
-    __slots__ = ("closing", "id")
+    __slots__ = ("_queue", "id", "resource_uris")
 
-    def __init__(self, request_id: RequestId) -> None:
+    def __init__(self, request_id: RequestId, resource_uris: frozenset[str]) -> None:
         self.id = request_id
-        # Set to end the subscription gracefully (server-initiated closure).
-        self.closing = asyncio.Event()
+        self.resource_uris = resource_uris
+        self._queue: asyncio.Queue[JSONRPCNotification | None] = asyncio.Queue()
+
+    def _deliver(self, notification: JSONRPCNotification) -> None:
+        self._queue.put_nowait(notification)
+
+    def _close(self) -> None:
+        """End the subscription gracefully (server-initiated closure)."""
+        self._queue.put_nowait(None)
 
 
 class MCPServer:
@@ -63,6 +71,7 @@ class MCPServer:
         sse_keepalive: float,
         authorization: Authorization | None,
         prompts: PromptRegistry | None,
+        resources: ResourceRegistry | None,
         state_secret: bytes | None,
     ) -> None:
         if not name:
@@ -107,6 +116,7 @@ class MCPServer:
             "subscriptions/listen": Method(self._listen, streaming=True),
         }
         self._capabilities: ServerCapabilities = {}
+
         if prompts is not None:
             if authorization is None and prompts._scoped:
                 raise ValueError("prompts with scopes require authorization to be configured")
@@ -114,6 +124,17 @@ class MCPServer:
             self._methods["prompts/list"] = Method(prompts._list)
             self._methods["prompts/get"] = Method(
                 prompts._get, scopes=prompts._get_scopes, input_required=True
+            )
+
+        self._resources = resources
+        if resources is not None:
+            if authorization is None and resources._scoped:
+                raise ValueError("resources with scopes require authorization")
+            self._capabilities["resources"] = {"subscribe": True}
+            self._methods["resources/list"] = Method(resources._list)
+            self._methods["resources/templates/list"] = Method(resources._templates_list)
+            self._methods["resources/read"] = Method(
+                resources._read, scopes=resources._get_scopes, input_required=True
             )
 
     def host_allowed(self, host: str | None) -> bool:
@@ -150,7 +171,22 @@ class MCPServer:
 
     async def _shutdown(self, app: web.Application) -> None:
         for subscription in self._subscriptions:
-            subscription.closing.set()
+            subscription._close()
+
+    def resource_updated(self, uri: str) -> None:
+        """Notify subscribed clients that a resource's contents changed."""
+        for subscription in self._subscriptions:
+            if uri in subscription.resource_uris:
+                subscription._deliver(
+                    {
+                        "jsonrpc": "2.0",
+                        "method": "notifications/resources/updated",
+                        "params": {
+                            "_meta": {META_SUBSCRIPTION_ID: subscription.id},
+                            "uri": uri,
+                        },
+                    }
+                )
 
     async def _discover(self, request: MCPRequest) -> DiscoverResult:
         """server/discover endpoint."""
@@ -170,20 +206,34 @@ class MCPServer:
         if not isinstance(notifications, Mapping):
             raise MCPError(INVALID_PARAMS, "notifications must be an object")
 
-        subscription = Subscription(request.id)
+        # The acknowledged filter reflects the subset the server will honor.
+        honored: SubscriptionFilter = {}
+        resource_uris = frozenset[str]()
+        requested = notifications.get("resourceSubscriptions")
+        if requested is not None:
+            if not isinstance(requested, list) or not all(
+                isinstance(uri, str) for uri in requested
+            ):
+                raise MCPError(INVALID_PARAMS, "resourceSubscriptions must be a list of URIs")
+            if self._resources is not None and requested:
+                resource_uris = frozenset(requested)
+                honored["resourceSubscriptions"] = sorted(resource_uris)
+
+        subscription = Subscription(request.id, resource_uris)
         self._subscriptions.add(subscription)
         notification: JSONRPCNotification = {
             "jsonrpc": "2.0",
             "method": "notifications/subscriptions/acknowledged",
             "params": {
                 "_meta": {META_SUBSCRIPTION_ID: request.id},
-                "notifications": {},
+                "notifications": honored,
             },
         }
         try:
             # https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/subscriptions#acknowledgment
             await request._emit(notification)
-            await subscription.closing.wait()
+            while (update := await subscription._queue.get()) is not None:
+                await request._emit(update)
         finally:
             self._subscriptions.discard(subscription)
 

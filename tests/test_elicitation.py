@@ -1,4 +1,5 @@
 import functools
+from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from typing import Any
 from unittest import mock
@@ -20,6 +21,8 @@ from aiohttp_mcp import (
     MultiSelectEnumSchema,
     NumberSchema,
     PromptRegistry,
+    Resource,
+    ResourceRegistry,
     StringSchema,
     TokenInfo,
     URLElicitation,
@@ -58,33 +61,45 @@ async def connect(request: MCPRequest) -> str:
     return "Connected."
 
 
-def get_prompt(
+def mrtr_post(
     client: TestClient[web.Request, web.Application],
+    method: str,
+    params: dict[str, object],
     name: str,
-    arguments: dict[str, str] | None = None,
     *,
     capabilities: dict[str, object] | None = None,
     input_responses: dict[str, object] | None = None,
     request_state: str | None = None,
     token: str | None = None,
 ) -> AbstractAsyncContextManager[ClientResponse]:
-    params: dict[str, object] = {"name": name}
-    if arguments is not None:
-        params["arguments"] = arguments
+    """POST to an MRTR-enabled method (``prompts/get``/``resources/read``)."""
+    params = dict(params)
     if input_responses is not None:
         params["inputResponses"] = input_responses
     if request_state is not None:
         params["requestState"] = request_state
-    headers = request_headers("prompts/get")
+    headers = request_headers(method)
     headers["Mcp-Name"] = name
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     body = request_body(
-        "prompts/get",
+        method,
         params,
         capabilities=capabilities if capabilities is not None else ALL_CAPS,
     )
     return client.post("/mcp", json=body, headers=headers)
+
+
+def get_prompt(
+    client: TestClient[web.Request, web.Application],
+    name: str,
+    arguments: dict[str, str] | None = None,
+    **kwargs: Any,
+) -> AbstractAsyncContextManager[ClientResponse]:
+    params: dict[str, object] = {"name": name}
+    if arguments is not None:
+        params["arguments"] = arguments
+    return mrtr_post(client, "prompts/get", params, name, **kwargs)
 
 
 async def result_of(resp: ClientResponse) -> dict[str, Any]:
@@ -107,6 +122,51 @@ async def first_round(
 
 
 ACCEPT: dict[str, object] = {"action": "accept", "content": {"seat": "12A"}}
+
+
+# The MRTR-enabled methods elicitation can be exercised through: setup()
+# kwargs, method, request params, Mcp-Name value, and the final-result text.
+TARGETS: "dict[str, tuple[Callable[[], dict[str, Any]], str, dict[str, object], str, Callable[[dict[str, Any]], object]]]" = {
+    "prompt": (
+        lambda: {"prompts": PromptRegistry(book_flight)},
+        "prompts/get",
+        {"name": "book_flight", "arguments": {"date": "2026-11-01"}},
+        "book_flight",
+        lambda result: result["messages"][0]["content"]["text"],
+    ),
+    "resource": (
+        # The same handler serves as a resource template.
+        lambda: {"resources": ResourceRegistry(Resource(book_flight, "flights://{date}"))},
+        "resources/read",
+        {"uri": "flights://2026-11-01"},
+        "flights://2026-11-01",
+        lambda result: result["contents"][0]["text"],
+    ),
+}
+
+
+@pytest.mark.parametrize("target", TARGETS)
+async def test_round_trip_on_each_mrtr_method(make_client: MakeClient, target: str) -> None:
+    """The elicitation round trip works on every MRTR-enabled method."""
+    make_kwargs, method, params, name, extract = TARGETS[target]
+    client = await make_client(**make_kwargs())
+
+    async with mrtr_post(client, method, params, name) as resp:
+        result = await result_of(resp)
+    assert result["resultType"] == "input_required"
+    assert list(result["inputRequests"]) == ["confirm"]
+
+    async with mrtr_post(
+        client,
+        method,
+        params,
+        name,
+        input_responses={"confirm": ACCEPT},
+        request_state=result["requestState"],
+    ) as resp:
+        result = await result_of(resp)
+    assert result["resultType"] == "complete"
+    assert extract(result) == "Booked 2026-11-01, seat 12A, quote 42."
 
 
 async def test_input_required_result(make_client: MakeClient) -> None:

@@ -1,14 +1,12 @@
-.. _aiohttp-mcp-elicitation:
-
 ===========
 Elicitation
 ===========
 
 `Elicitation <https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation>`_
 lets a handler ask the user for additional input. It can be used in
-:ref:`prompts <aiohttp-mcp-prompts>`, resources and tasks. Elicitation is performed
-with the :meth:`.MCPRequest.elicit` method, which will return the user's input.
-There are 2 forms that can be used.
+:doc:`prompts <prompts>`, :doc:`resources <resources>` and tasks.
+Elicitation is performed with the :meth:`.MCPRequest.elicit` method, which will
+return the user's input. There are 2 forms that can be used.
 
 Form elicitation
 ================
@@ -113,8 +111,7 @@ arrives.
 This comparison requires the MCP authorization subject and the application's
 user IDs to come from the same identifier space. The simplest arrangement is
 :class:`.LocalAuthorization` reusing the application's login via
-``authenticate_request=authorized_userid``, as shown in
-:ref:`aiohttp-mcp-authorization`.
+``authenticate_request=authorized_userid``, as shown in :doc:`authorization`.
 
 Browser login via an external authorization server
 ++++++++++++++++++++++++++++++++++++++++++++++++++
