@@ -114,7 +114,7 @@ def test_embedded_resource_blob() -> None:
 @pytest.mark.parametrize("kwargs", ({}, {"text": "x", "blob": b"y"}))
 def test_embedded_resource_text_xor_blob(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValueError, match="exactly one"):
-        EmbeddedResource("resource://example", **kwargs)  # type: ignore[arg-type]
+        EmbeddedResource("resource://example", **kwargs)  # type: ignore[call-overload]
 
 
 def test_message_roles() -> None:

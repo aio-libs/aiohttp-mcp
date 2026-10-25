@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self, overload
 
 from . import _protocol
 
@@ -197,6 +197,42 @@ class EmbeddedResource(Content):
     text: str | None = field(default=None, kw_only=True)
     blob: bytes | None = field(default=None, kw_only=True)
     mime_type: str | None = field(default=None, kw_only=True)
+
+    if TYPE_CHECKING:
+        # Static form of the __post_init__ check: exactly one of text/blob.
+        @overload
+        def __init__(
+            self,
+            uri: str,
+            *,
+            text: str,
+            mime_type: str | None = None,
+            audience: Sequence[_protocol.Role] | None = None,
+            priority: float | None = None,
+            last_modified: str | None = None,
+        ) -> None: ...
+        @overload
+        def __init__(
+            self,
+            uri: str,
+            *,
+            blob: bytes,
+            mime_type: str | None = None,
+            audience: Sequence[_protocol.Role] | None = None,
+            priority: float | None = None,
+            last_modified: str | None = None,
+        ) -> None: ...
+        def __init__(
+            self,
+            uri: str,
+            *,
+            text: str | None = None,
+            blob: bytes | None = None,
+            mime_type: str | None = None,
+            audience: Sequence[_protocol.Role] | None = None,
+            priority: float | None = None,
+            last_modified: str | None = None,
+        ) -> None: ...
 
     def __post_init__(self) -> None:
         if (self.text is None) == (self.blob is None):
