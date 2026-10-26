@@ -2,8 +2,12 @@ def minimal_setup() -> None:
     import aiohttp_mcp
     from aiohttp import web
 
+    async def get_weather(location: str) -> str:
+        """Get current weather information for a location."""
+        return f"Sunny in {location}."
+
     app = web.Application()
-    aiohttp_mcp.setup(app)
+    aiohttp_mcp.setup(app, tools=aiohttp_mcp.ToolRegistry(get_weather))
     web.run_app(app, handler_cancellation=True)
 
 

@@ -40,7 +40,7 @@ from ._elicitation import (
     StringSchema,
     URLElicitation,
 )
-from ._handlers import Doc
+from ._handlers import Doc, Header
 from ._prompts import Prompt, PromptHandler, PromptRegistry, PromptResult
 from ._protocol import PROTOCOL_VERSIONS
 from ._resources import (
@@ -52,6 +52,7 @@ from ._resources import (
 )
 from ._secure_form import FormContext, RenderForm
 from ._server import MCPServer
+from ._tools import Tool, ToolError, ToolHandler, ToolRegistry, ToolResult
 from ._transport import MCPRequest
 from ._validators import IntrospectionAuthorization
 
@@ -75,6 +76,7 @@ __all__ = (
     "ConsentContext",
     "Content",
     "Doc",
+    "Header",
     "ElicitResult",
     "Elicitation",
     "EmbeddedResource",
@@ -111,6 +113,11 @@ __all__ = (
     "TextContent",
     "TokenInfo",
     "TokenValidator",
+    "Tool",
+    "ToolError",
+    "ToolHandler",
+    "ToolRegistry",
+    "ToolResult",
     "URLElicitation",
     "setup",
 )
@@ -135,6 +142,7 @@ def setup(
     well_known_routes: bool = True,
     prompts: PromptRegistry | None = None,
     resources: ResourceRegistry | None = None,
+    tools: ToolRegistry | None = None,
     state_secret: bytes | None = None,
     authenticate_request: AuthenticateRequest | None = None,
     render_form: RenderForm | None = None,
@@ -176,6 +184,7 @@ def setup(
     :param resources: The registry of resources to serve. Enables the
         ``resources`` capability, including per-resource update notifications
         via :meth:`.MCPServer.resource_updated`.
+    :param tools: The registry of tools to serve. Enables the ``tools`` capability.
     :param state_secret: Key used for signing when using :meth:`.MCPRequest.elicit`.
         Random when omitted, which invalidates in-flight requests on restart and
         breaks them across workers.
@@ -211,6 +220,7 @@ def setup(
         authorization=authorization,
         prompts=prompts,
         resources=resources,
+        tools=tools,
         state_secret=state_secret,
     )
     app.router.add_post(path, server._handle)

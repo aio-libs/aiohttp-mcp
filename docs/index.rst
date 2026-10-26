@@ -33,8 +33,8 @@ Remote servers
 
 A server exposed on the internet needs two additions: the domain added to
 ``allowed_origins``, and an authorization configuration. MCP uses :brand:`OAuth` 2.1, and
-:mod:`aiohttp_mcp` ships everything needed for it out of the box - including the
-authorization server - so a complete, working deployment is:
+:mod:`aiohttp_mcp` ships everything needed for it out of the box (including an
+authorization server) so a complete, working deployment is:
 
 .. literalinclude:: code/index.py
    :pyobject: remote_setup
@@ -52,6 +52,7 @@ Table of Contents
    :name: mastertoc
    :maxdepth: 2
 
+   tools
    prompts
    resources
    authorization

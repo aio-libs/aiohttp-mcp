@@ -19,8 +19,12 @@ Usage
     import aiohttp_mcp
     from aiohttp import web
 
+    async def get_weather(location: str) -> str:
+        """Get current weather information for a location."""
+        return f"Sunny in {location}."
+
     app = web.Application()
-    aiohttp_mcp.setup(app)
+    aiohttp_mcp.setup(app, tools=aiohttp_mcp.ToolRegistry(get_weather))
     web.run_app(app, handler_cancellation=True)
 
 This serves the MCP endpoint at ``/mcp``. This can be added to any existing
@@ -35,8 +39,8 @@ Remote servers and auth
 
 A server exposed on the internet needs two additions: the domain added to
 ``allowed_origins``, and an authorization configuration. MCP uses OAuth 2.1, and
-aiohttp-mcp ships everything needed for it out of the box - including the
-authorization server - so a complete, working deployment is:
+aiohttp-mcp ships everything needed for it out of the box (including an
+authorization server) so a complete, working deployment is:
 
 .. code-block:: python
 

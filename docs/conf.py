@@ -104,6 +104,11 @@ spelling_ignore_wiki_words = True
 # -- Nitpicky mode -----------------------------------------------------------
 
 nitpicky = True
+# https://github.com/sphinx-doc/sphinx/issues/14462
+nitpick_ignore = [
+    ("py:class", "aiohttp_mcp._tools._T"),
+    ("py:obj", "aiohttp_mcp._tools._T"),
+]
 
 def _resolve_type_alias(app, env, node, contnode):
     # TODO: Drop this function when fixed: https://github.com/sphinx-doc/sphinx/issues/14745

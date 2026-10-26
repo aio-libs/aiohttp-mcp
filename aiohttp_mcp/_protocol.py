@@ -380,6 +380,46 @@ class ReadResourceResult(InputResult):
     cacheScope: Literal["public", "private"]
 
 
+_InputSchema = TypedDict("_InputSchema", {
+    "$schema": NotRequired[str], "type": Literal["object"]
+})
+_OutputSchema = TypedDict("_OutputSchema", {"$schema": NotRequired[str]})
+
+
+# TODO(PY315): closed=True
+class ToolAnnotations(TypedDict, total=False):
+    title: str
+    readOnlyHint: bool
+    destructiveHint: bool
+    idempotentHint: bool
+    openWorldHint: bool
+
+
+# Named ``Tool`` in the specification schema.
+# TODO(PY315): closed=True
+class ToolInfo(TypedDict):
+    name: str
+    title: NotRequired[str]
+    description: NotRequired[str]
+    inputSchema: _InputSchema
+    outputSchema: NotRequired[_OutputSchema]
+    annotations: NotRequired[ToolAnnotations]
+    icons: NotRequired[Sequence[Icon]]
+
+
+class ListToolsResult(InputResult):
+    tools: Sequence[ToolInfo]
+    nextCursor: NotRequired[str]
+    ttlMs: int
+    cacheScope: Literal["public", "private"]
+
+
+class CallToolResult(InputResult):
+    content: Sequence[ContentBlock]
+    structuredContent: NotRequired[object]
+    isError: NotRequired[bool]
+
+
 # TODO(PY315): closed=True
 class _SchemaCommon(TypedDict, total=False):
     title: str

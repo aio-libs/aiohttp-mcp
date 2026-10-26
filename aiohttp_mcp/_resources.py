@@ -5,7 +5,7 @@ import sys
 from base64 import b64encode
 from collections.abc import Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Generic, Literal, TypeVar, overload
 from urllib.parse import unquote
 
 if sys.version_info >= (3, 12):
@@ -29,6 +29,8 @@ from ._protocol import (
     TextResourceContents,
 )
 from ._transport import MCPRequest
+
+_ResourceT = TypeVar("_ResourceT", ResourceInfo, ResourceTemplateInfo)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,9 +155,9 @@ class Resource:
 
 
 @dataclass(frozen=True, slots=True)
-class _ResourceSpec[T: (ResourceInfo, ResourceTemplateInfo)]():
+class _ResourceSpec(Generic[_ResourceT]):
     resource: Resource
-    info: T
+    info: _ResourceT
     wants_request: bool
     pattern: re.Pattern[str] | None
     decode: frozenset[str]
@@ -337,9 +339,9 @@ class ResourceRegistry:
                 return None
             uri_part = uri_part.rpartition("/")[0]
 
-    def _visible[T: (ResourceInfo, ResourceTemplateInfo)](
-        self, ctx: MCPRequest, specs: dict[str, _ResourceSpec[T]]
-    ) -> list[T]:
+    def _visible(
+        self, ctx: MCPRequest, specs: dict[str, _ResourceSpec[_ResourceT]]
+    ) -> list[_ResourceT]:
         """The visible resource definitions for this caller's authorization."""
         auth = ctx.auth
         return [

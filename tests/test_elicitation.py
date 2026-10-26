@@ -25,6 +25,7 @@ from aiohttp_mcp import (
     ResourceRegistry,
     StringSchema,
     TokenInfo,
+    ToolRegistry,
     URLElicitation,
     setup,
 )
@@ -141,6 +142,13 @@ TARGETS: "dict[str, tuple[Callable[[], dict[str, Any]], str, dict[str, object], 
         {"uri": "flights://2026-11-01"},
         "flights://2026-11-01",
         lambda result: result["contents"][0]["text"],
+    ),
+    "tool": (
+        lambda: {"tools": ToolRegistry(book_flight)},
+        "tools/call",
+        {"name": "book_flight", "arguments": {"date": "2026-11-01"}},
+        "book_flight",
+        lambda result: result["content"][0]["text"],
     ),
 }
 

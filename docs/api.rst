@@ -13,6 +13,26 @@ Setup
 
 .. autodata:: PROTOCOL_VERSIONS
 
+
+Tools
+=====
+
+.. autoclass:: aiohttp_mcp.ToolRegistry
+
+.. autoclass:: aiohttp_mcp.Tool
+
+.. autoclass:: aiohttp_mcp.ToolResult
+
+.. autoclass:: aiohttp_mcp.ToolError
+
+.. autoclass:: aiohttp_mcp.Header
+
+.. autotype:: ToolHandler
+
+   A tool function. Arguments arrive as keyword arguments, validated against
+   the schema derived from the signature's type hints, with an optional
+   first parameter annotated :class:`MCPRequest` receiving the current request.
+
 Prompts
 =======
 

@@ -20,6 +20,8 @@ from aiohttp_mcp import (
     Resource,
     ResourceRegistry,
     TokenInfo,
+    Tool,
+    ToolRegistry,
     setup,
 )
 from aiohttp_mcp._protocol import InputResult
@@ -585,6 +587,15 @@ FEATURES = {
             # The scopes of a template apply to every URI it matches.
             ("resources/read", {"uri": "files://a/b"}, "files://a/b"),
         ),
+    ),
+    "tools": ScopedFeature(
+        kwargs=lambda: {
+            "tools": ToolRegistry(open_item, Tool(secret_item, scopes=("mcp:write",)))
+        },
+        lists=(
+            ("tools/list", "tools", ["open_item"], ["open_item", "secret_item"]),
+        ),
+        calls=(("tools/call", {"name": "secret_item"}, "secret_item"),),
     ),
 }
 scoped_features = pytest.mark.parametrize("feature", FEATURES.values(), ids=FEATURES.keys())

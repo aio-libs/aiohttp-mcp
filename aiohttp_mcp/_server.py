@@ -31,6 +31,7 @@ from ._elicitation import _PendingForm
 from ._prompts import PromptRegistry
 from ._resources import ResourceRegistry
 from ._secure_form import RenderForm, handle_form, render_form_default
+from ._tools import ToolRegistry
 from ._transport import MCPRequest, Method, handle_request
 
 
@@ -72,6 +73,7 @@ class MCPServer:
         authorization: Authorization | None,
         prompts: PromptRegistry | None,
         resources: ResourceRegistry | None,
+        tools: ToolRegistry | None,
         state_secret: bytes | None,
     ) -> None:
         if not name:
@@ -135,6 +137,15 @@ class MCPServer:
             self._methods["resources/templates/list"] = Method(resources._templates_list)
             self._methods["resources/read"] = Method(
                 resources._read, scopes=resources._get_scopes, input_required=True
+            )
+
+        if tools is not None:
+            if authorization is None and tools._scoped:
+                raise ValueError("tools with scopes require authorization")
+            self._capabilities["tools"] = {}
+            self._methods["tools/list"] = Method(tools._list)
+            self._methods["tools/call"] = Method(
+                tools._call, scopes=tools._get_scopes, input_required=True
             )
 
     def host_allowed(self, host: str | None) -> bool:
