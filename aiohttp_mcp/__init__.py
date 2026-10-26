@@ -51,7 +51,7 @@ from ._resources import (
 )
 from ._secure_form import FormContext, RenderForm
 from ._server import MCPServer
-from ._tools import Tool, ToolError, ToolHandler, ToolRegistry, ToolResult
+from ._tools import RateLimiter, Tool, ToolError, ToolHandler, ToolRegistry, ToolResult
 from ._transport import MCPRequest
 from ._validators import IntrospectionAuthorization
 
@@ -98,6 +98,7 @@ __all__ = (
     "PromptHandler",
     "PromptRegistry",
     "PromptResult",
+    "RateLimiter",
     "RenderConsent",
     "RenderForm",
     "Resource",

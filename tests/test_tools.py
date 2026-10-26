@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager
-from typing import Annotated, Any, Literal, NotRequired, TypedDict
+from typing import Annotated, Any, Literal, NotRequired, TypedDict, cast
+from unittest import mock
 
 import pytest
 from _helpers import MakeClient, request_body, request_headers
@@ -10,6 +11,7 @@ from aiohttp.test_utils import TestClient
 from aiohttp_mcp import (
     Doc,
     MCPRequest,
+    RateLimiter,
     TextContent,
     Tool,
     ToolError,
@@ -539,3 +541,167 @@ async def test_unrepresentable_literal_rejected() -> None:
 
     with pytest.raises(ValueError):
         ToolRegistry(bad)
+
+
+# - Rate limiting -------------------------------------------------------------
+
+
+class _KeyedLimiter(RateLimiter):
+    """Counts against an explicit key, for driving the bucket directly."""
+
+    current_key = "a"
+
+    def key(self, request: MCPRequest) -> str:
+        return self.current_key
+
+
+_REQUEST = mock.create_autospec(MCPRequest, spec_set=True, instance=True)
+
+
+async def test_rate_limiter_token_bucket() -> None:
+    limiter = _KeyedLimiter(2, 10.0)  # 1 token / 5s, burst 2
+    with mock.patch("time.monotonic") as monotonic:
+        monotonic.return_value = 1000.0
+        assert await limiter.acquire(_REQUEST) == 0.0
+        assert await limiter.acquire(_REQUEST) == 0.0
+        assert await limiter.acquire(_REQUEST) == pytest.approx(5.0)
+        # Refills continuously; a token is back after 5 seconds.
+        monotonic.return_value = 1004.0
+        assert await limiter.acquire(_REQUEST) == pytest.approx(1.0)
+        monotonic.return_value = 1005.0
+        assert await limiter.acquire(_REQUEST) == 0.0
+        # Other callers have their own bucket.
+        limiter.current_key = "b"
+        assert await limiter.acquire(_REQUEST) == 0.0
+
+
+async def test_rate_limiter_prunes_idle_buckets() -> None:
+    limiter = _KeyedLimiter(2, 10.0)
+    with mock.patch("time.monotonic") as monotonic:
+        monotonic.return_value = 1000.0
+        for key in ("a", "b", "c"):
+            limiter.current_key = key
+            assert await limiter.acquire(_REQUEST) == 0.0
+        assert len(limiter._buckets) == 3
+        # A caller active within the period keeps its bucket past the original expiry.
+        limiter.current_key = "a"
+        monotonic.return_value = 1008.0
+        assert await limiter.acquire(_REQUEST) == 0.0
+        monotonic.return_value = 1012.0
+        assert await limiter.acquire(_REQUEST) == 0.0
+        assert set(limiter._buckets) == {"a"}  # b and c idle for a period
+        # Repeated use never arms extra heap entries: still one per bucket.
+        assert len(limiter._expiries) == 1
+        # And is itself pruned one period after its last use.
+        limiter.current_key = "d"
+        monotonic.return_value = 1030.0
+        assert await limiter.acquire(_REQUEST) == 0.0
+        assert set(limiter._buckets) == {"d"}
+        assert len(limiter._expiries) == 1
+
+
+def test_rate_limit_validation() -> None:
+    with pytest.raises(ValueError):
+        RateLimiter(0)
+    with pytest.raises(ValueError):
+        RateLimiter(5, period=0)
+
+
+def test_rate_limit_on_by_default() -> None:
+    registry = ToolRegistry(echo)
+    limiter = registry._limiter
+    assert limiter is not None
+    assert limiter._capacity == 20
+    assert limiter._period == 60.0
+    # And can be turned off explicitly.
+    assert ToolRegistry(echo, rate_limiter=None)._limiter is None
+
+
+async def test_registry_rate_limit_shared_across_tools(make_client: MakeClient) -> None:
+    client = await make_client(
+        tools=ToolRegistry(echo, total, rate_limiter=RateLimiter(2, period=3600))
+    )
+    async with call(client, "echo", {"text": "a"}) as resp:
+        assert "isError" not in await result_of(resp)
+    async with call(client, "total", {"values": [1.0]}) as resp:
+        assert "isError" not in await result_of(resp)
+    # The registry budget is shared: the third call is limited whichever tool.
+    async with call(client, "echo", {"text": "b"}) as resp:
+        result = await result_of(resp)
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    assert text.startswith("Rate limit exceeded. Retry in ")
+    assert "seconds" in text
+
+
+async def test_rate_limit_keyed_by_subject(make_client: MakeClient) -> None:
+    tokens = {
+        "alice-token": TokenInfo(scopes=frozenset({"mcp"}), subject="alice"),
+        "bob-token": TokenInfo(scopes=frozenset({"mcp"}), subject="bob"),
+    }
+
+    async def validator(token: str, request: web.Request) -> TokenInfo | None:
+        return tokens.get(token)
+
+    make_auth = functools.partial(
+        Authorization,
+        validator,
+        resource="https://mcp.server.test",
+        auth_servers=("https://auth.server.test",),
+        default_scopes=("mcp",),
+    )
+    client = await make_client(
+        authorization=make_auth(),
+        tools=ToolRegistry(echo, rate_limiter=RateLimiter(1, period=3600)),
+    )
+
+    def authed(token: str) -> AbstractAsyncContextManager[ClientResponse]:
+        headers = request_headers("tools/call")
+        headers["Mcp-Name"] = "echo"
+        headers["Authorization"] = f"Bearer {token}"
+        body = request_body("tools/call", {"name": "echo", "arguments": {"text": "x"}})
+        return client.post("/mcp", json=body, headers=headers)
+
+    async with authed("alice-token") as resp:
+        assert "isError" not in await result_of(resp)
+    async with authed("alice-token") as resp:
+        assert (await result_of(resp))["isError"] is True
+    # A different user has their own budget.
+    async with authed("bob-token") as resp:
+        assert "isError" not in await result_of(resp)
+
+
+async def test_rate_limiter_key_subclass(make_client: MakeClient) -> None:
+    class TenantLimiter(RateLimiter):
+        def key(self, request: MCPRequest) -> str:
+            return request.http.headers.get("X-Tenant", "anon")
+
+    client = await make_client(
+        tools=ToolRegistry(echo, rate_limiter=TenantLimiter(1, period=3600))
+    )
+
+    def tenant_call(tenant: str) -> AbstractAsyncContextManager[ClientResponse]:
+        headers = request_headers("tools/call")
+        headers["Mcp-Name"] = "echo"
+        headers["X-Tenant"] = tenant
+        body = request_body("tools/call", {"name": "echo", "arguments": {"text": "x"}})
+        return client.post("/mcp", json=body, headers=headers)
+
+    async with tenant_call("a") as resp:
+        assert "isError" not in await result_of(resp)
+    async with tenant_call("a") as resp:
+        assert (await result_of(resp))["isError"] is True
+    async with tenant_call("b") as resp:
+        assert "isError" not in await result_of(resp)
+
+
+async def test_rate_limiter_acquire_subclass(make_client: MakeClient) -> None:
+    class Closed(RateLimiter):
+        async def acquire(self, request: MCPRequest) -> float:
+            return 42.0
+
+    client = await make_client(tools=ToolRegistry(echo, rate_limiter=Closed()))
+    async with call(client, "echo", {"text": "x"}) as resp:
+        result = await result_of(resp)
+    assert result["isError"] is True
+    assert "42 seconds" in result["content"][0]["text"]

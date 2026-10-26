@@ -23,6 +23,8 @@ Tools
 
 .. autoclass:: aiohttp_mcp.ToolResult
 
+.. autoclass:: aiohttp_mcp.RateLimiter
+
 .. autoclass:: aiohttp_mcp.ToolError
 
 .. autoclass:: aiohttp_mcp.Header

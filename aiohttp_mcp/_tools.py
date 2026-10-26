@@ -1,10 +1,14 @@
 """Tools: functions the language model can discover and invoke."""
 
+import heapq
 import inspect
 import json
+import math
 import re
 import sys
+import time
 import types
+from types import EllipsisType
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import (
@@ -82,6 +86,76 @@ class ToolError(Exception):
     The message should contain actionable feedback.
     e.g. ``"Invalid departure date: must be in the future."``.
     """
+
+
+class RateLimiter:
+    """Rate limiting of tool invocations.
+
+    Callers are told how long to back off when they exceed the limit, inside
+    an error tool result, so a model can self-correct.
+
+    Subclass it to how rate limiting functions: override :meth:`key` to change how
+    callers are identified, or :meth:`acquire` to replace the strategy entirely.
+
+    :param limit: Invocations allowed per period.
+    :param period: Length of the period in seconds.
+    """
+
+    __slots__ = ("_buckets", "_capacity", "_expiries", "_period", "_rate")
+
+    def __init__(self, limit: float = 20.0, period: float = 60.0) -> None:
+        if limit < 1:
+            raise ValueError("limit must be >= 1")
+        if period <= 0:
+            raise ValueError("period must be > 0")
+        self._capacity = limit
+        self._period = period
+        self._rate = limit / period  # Tokens per second
+        self._buckets: dict[str, tuple[float, float]] = {}  # (tokens, updated)
+        self._expiries: list[tuple[float, str]] = []  # (expiry, bucket_key)
+
+    def key(self, request: MCPRequest) -> str:
+        """The identity a request's invocations are counted against.
+
+        The authenticated user when authorization is configured, otherwise
+        the peer address (meaningful only when the connection is direct;
+        behind a reverse proxy, configure something like
+        :mod:`aiohttp_remotes` so :attr:`~aiohttp.web.BaseRequest.remote`
+        reflects the client).
+
+        Override to change how callers are grouped.
+        """
+        if request.auth is not None and request.auth.subject is not None:
+            return f"sub:{request.auth.subject}"
+        return f"ip:{request.http.remote}"
+
+    async def acquire(self, request: MCPRequest) -> float:
+        """Return number of seconds the caller must wait (0 if call allowed).
+
+        Override to change the rate limit algorithm.
+        """
+        now = time.monotonic()
+        while self._expiries and self._expiries[0][0] <= now:
+            _, exp_key = heapq.heappop(self._expiries)
+            bucket = self._buckets.get(exp_key)
+            if bucket is None:
+                continue
+            expiry = bucket[1] + self._period
+            if expiry <= now:
+                del self._buckets[exp_key]
+            else:
+                heapq.heappush(self._expiries, (expiry, exp_key))
+
+        key = self.key(request)
+        if (bucket := self._buckets.get(key)) is None:
+            tokens = self._capacity
+            heapq.heappush(self._expiries, (now + self._period, key))
+        else:
+            tokens = min(self._capacity, bucket[0] + (now - bucket[1]) * self._rate)
+            if tokens < 1.0:
+                return (1.0 - tokens) / self._rate
+        self._buckets[key] = (tokens - 1.0, now)
+        return 0.0
 
 
 def _schema_error(context: str, hint: object) -> ValueError:
@@ -511,6 +585,12 @@ class ToolRegistry:
         (``"public"``) or only the requesting client (``"private"``, the safe
         default: with authorization configured the list may vary by the
         caller's scopes).
+    :param rate_limiter: Limits the tool invocations of each caller, counted
+        across all this registry's tools; see :class:`RateLimiter`, which can
+        also be a subclass for custom keying or strategies. Exceeding the
+        limit produces an error tool result telling the model how long to
+        back off. Pass :data:`None` to disable rate limiting (e.g. if rate
+        limiting in a proxy).
     """
 
     def __init__(
@@ -518,6 +598,8 @@ class ToolRegistry:
         *tools: Tool | ToolHandler,
         ttl: float = 300.0,
         cache_scope: Literal["public", "private"] = "private",
+        # TODO(PY315): Use sentinel()
+        rate_limiter: RateLimiter | None | EllipsisType = ...,
     ) -> None:
         if ttl < 0:
             raise ValueError("ttl must be >= 0")
@@ -525,6 +607,7 @@ class ToolRegistry:
             raise ValueError("cache_scope must be 'public' or 'private'")
         self._ttl_ms = round(ttl * 1000)
         self._cache_scope: Literal["public", "private"] = cache_scope
+        self._limiter = RateLimiter() if rate_limiter is Ellipsis else rate_limiter
         self._specs: dict[str, _ToolSpec] = {}
         for tool in tools:
             spec = _build_spec(tool if isinstance(tool, Tool) else Tool(tool))
@@ -565,6 +648,10 @@ class ToolRegistry:
         arguments = ctx.params.get("arguments", {})
         if not isinstance(arguments, Mapping):
             raise MCPError(INVALID_PARAMS, "arguments must be an object")
+
+        # https://modelcontextprotocol.io/specification/2026-07-28/server/tools#security-considerations
+        if self._limiter is not None and (wait := await self._limiter.acquire(ctx)):
+            return _error_result(f"Rate limit exceeded. Retry in {math.ceil(wait)} seconds.")
 
         # https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#server-behavior-for-custom-headers
         _enforce_param_headers(ctx, spec, arguments)
