@@ -13,7 +13,7 @@ if sys.version_info >= (3, 12):
 else:
     from typing_extensions import TypeAliasType
 
-from ._content import Icon
+from ._content import EmbeddedResource, Icon
 from ._handlers import _apply_details, _derive_name, _inspect_handler
 from ._protocol import (
     INVALID_PARAMS,
@@ -375,6 +375,22 @@ class ResourceRegistry:
             "cacheScope": self._cache_scope,
         }
 
+    async def _fetch(
+        self, ctx: MCPRequest, spec: _AnyResourceSpec, arguments: dict[str, str]
+    ) -> tuple[ResourceContents, ...]:
+        """Invoke a resource's handler and normalise the contents."""
+        if spec.wants_request:
+            result = await spec.resource.handler(ctx, **arguments)
+        else:
+            result = await spec.resource.handler(**arguments)
+        if isinstance(result, str):
+            return (ResourceContents(text=result, mime_type=spec.resource.mime_type),)
+        if isinstance(result, bytes):
+            return (ResourceContents(blob=result, mime_type=spec.resource.mime_type),)
+        if isinstance(result, ResourceContents):
+            return (result,)
+        return tuple(result)
+
     async def _read(self, ctx: MCPRequest) -> ReadResourceResult:
         """resources/read endpoint."""
         uri = ctx.params.get("uri")
@@ -385,21 +401,42 @@ class ResourceRegistry:
             # https://modelcontextprotocol.io/specification/2026-07-28/server/resources#error-handling
             raise MCPError(INVALID_PARAMS, "Resource not found", data={"uri": uri})
         spec, arguments = resolved
-        if spec.wants_request:
-            result = await spec.resource.handler(ctx, **arguments)
-        else:
-            result = await spec.resource.handler(**arguments)
-
+        contents = await self._fetch(ctx, spec, arguments)
         resource = spec.resource
-        if isinstance(result, str):
-            result = (ResourceContents(text=result, mime_type=resource.mime_type),)
-        elif isinstance(result, bytes):
-            result = (ResourceContents(blob=result, mime_type=resource.mime_type),)
-        elif isinstance(result, ResourceContents):
-            result = (result,)
         ttl_ms = self._read_ttl_ms if resource.ttl is None else round(resource.ttl * 1000)
         return {
-            "contents": [contents._to_wire(uri) for contents in result],
+            "contents": [c._to_wire(uri) for c in contents],
             "ttlMs": ttl_ms,
             "cacheScope": resource.cache_scope or self._read_cache_scope,
         }
+
+    async def _embed(self, ctx: MCPRequest, uri: str) -> list[EmbeddedResource]:
+        """Implementation of :meth:`.MCPRequest.embed_resource`."""
+        resolved = self._resolve(uri)
+        if resolved is None:
+            raise LookupError(f"No resource matches {uri!r}")
+        spec, arguments = resolved
+        resource = spec.resource
+        embedded = []
+        for c in await self._fetch(ctx, spec, arguments):
+            if c.text is not None:
+                block = EmbeddedResource(
+                    c.uri or uri,
+                    text=c.text,
+                    mime_type=c.mime_type,
+                    audience=resource.audience,
+                    priority=resource.priority,
+                    last_modified=resource.last_modified,
+                )
+            else:
+                assert c.blob is not None  # ResourceContents holds one of the two.
+                block = EmbeddedResource(
+                    c.uri or uri,
+                    blob=c.blob,
+                    mime_type=c.mime_type,
+                    audience=resource.audience,
+                    priority=resource.priority,
+                    last_modified=resource.last_modified,
+                )
+            embedded.append(block)
+        return embedded

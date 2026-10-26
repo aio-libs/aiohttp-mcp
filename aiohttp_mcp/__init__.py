@@ -21,7 +21,6 @@ from ._content import (
     EmbeddedResource,
     Icon,
     ImageContent,
-    Message,
     ResourceLink,
     TextContent,
 )
@@ -41,7 +40,7 @@ from ._elicitation import (
     URLElicitation,
 )
 from ._handlers import Doc, Header
-from ._prompts import Prompt, PromptHandler, PromptRegistry, PromptResult
+from ._prompts import Message, Prompt, PromptHandler, PromptRegistry, PromptResult
 from ._protocol import PROTOCOL_VERSIONS
 from ._resources import (
     Resource,

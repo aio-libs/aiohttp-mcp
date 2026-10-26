@@ -10,7 +10,7 @@ if sys.version_info >= (3, 12):
 else:
     from typing_extensions import TypeAliasType
 
-from ._content import Content, Icon, Message, TextContent
+from ._content import Content, Icon, TextContent
 from ._handlers import _apply_details, _derive_name, _inspect_handler
 from ._protocol import (
     INVALID_PARAMS,
@@ -20,9 +20,29 @@ from ._protocol import (
     PromptArgument,
     PromptInfo,
     PromptMessage,
+    Role,
     ServerCapabilities,
 )
 from ._transport import MCPRequest
+
+
+@dataclass(frozen=True, slots=True)
+class Message:
+    """One message of a prompt, with an explicit role.
+
+    Bare content blocks returned from a prompt function become ``user``
+    messages (indicating that the user produced the message).
+    Wrap them in a :class:`.Message` for other roles::
+
+        Message(TextContent("Of course!"), role="assistant")
+    """
+
+    content: Content
+    role: Role = "user"
+
+    def _to_wire(self) -> PromptMessage:
+        return {"role": self.role, "content": self.content._to_wire()}
+
 
 # TODO(PY312): use the `type` statement.
 PromptResult = TypeAliasType("PromptResult", str | Sequence[Content | Message])

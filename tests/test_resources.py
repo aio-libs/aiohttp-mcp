@@ -15,12 +15,18 @@ from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 
 from aiohttp_mcp import (
+    Content,
+    EmbeddedResource,
     Icon,
     MCPRequest,
     MCPServer,
+    Message,
+    PromptRegistry,
     Resource,
     ResourceContents,
     ResourceRegistry,
+    TextContent,
+    ToolRegistry,
 )
 
 Client = TestClient[web.Request, web.Application]
@@ -405,3 +411,88 @@ async def test_graceful_shutdown_closes_stream(make_client: MakeClient) -> None:
     assert final["result"]["resultType"] == "complete"
 
 
+# - Embedding registered resources -------------------------------------------
+
+
+def tool_call(client: Client, name: str) -> AbstractAsyncContextManager[ClientResponse]:
+    body = request_body("tools/call", {"name": name})
+    headers = request_headers("tools/call")
+    headers["Mcp-Name"] = name
+    return client.post("/mcp", json=body, headers=headers)
+
+
+async def test_embed_resource(make_client: MakeClient) -> None:
+    """A tool embeds a registered resource without duplicating its contents."""
+
+    async def attach_readme(request: MCPRequest) -> list[EmbeddedResource]:
+        return await request.embed_resource("docs://readme")
+
+    client = await make_client(resources=registry(), tools=ToolRegistry(attach_readme))
+    async with tool_call(client, "attach_readme") as resp:
+        result = await result_of(resp)
+    assert result["content"] == [
+        {
+            "type": "resource",
+            "resource": {
+                "uri": "docs://readme",
+                "mimeType": "text/markdown",
+                "text": "# aiohttp-mcp",
+            },
+        }
+    ]
+
+
+async def test_embed_template_and_annotations(make_client: MakeClient) -> None:
+    async def doc_prompt(request: MCPRequest) -> list[Content]:
+        return [
+            TextContent("Use this file:"),
+            *await request.embed_resource("file:///src/main.rs"),
+        ]
+
+    client = await make_client(
+        resources=ResourceRegistry(
+            Resource(
+                project_file,
+                "file:///{+path}",
+                mime_type="text/plain",
+                audience=("assistant",),
+                priority=0.9,
+            )
+        ),
+        prompts=PromptRegistry(doc_prompt),
+    )
+    body = request_body("prompts/get", {"name": "doc_prompt"})
+    headers = request_headers("prompts/get")
+    headers["Mcp-Name"] = "doc_prompt"
+    async with client.post("/mcp", json=body, headers=headers) as resp:
+        result = await result_of(resp)
+    embedded = result["messages"][1]["content"]
+    assert embedded == {
+        "type": "resource",
+        "resource": {
+            "uri": "file:///src/main.rs",
+            "text": "contents of src/main.rs",
+        },
+        "annotations": {"audience": ["assistant"], "priority": 0.9},
+    }
+
+
+async def test_embed_unknown_uri_is_server_error(make_client: MakeClient) -> None:
+    async def broken(request: MCPRequest) -> str:
+        await request.embed_resource("docs://missing")
+        assert False
+
+    client = await make_client(resources=registry(), tools=ToolRegistry(broken))
+    async with tool_call(client, "broken") as resp:
+        assert resp.status == 500
+        assert (await resp.json())["error"]["code"] == -32603
+
+
+async def test_embed_without_resources_configured(make_client: MakeClient) -> None:
+    async def broken(request: MCPRequest) -> str:
+        await request.embed_resource("docs://readme")
+        assert False
+
+    client = await make_client(tools=ToolRegistry(broken))
+    async with tool_call(client, "broken") as resp:
+        assert resp.status == 500

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from aiohttp_mcp import (
-    AudioContent, EmbeddedResource, Icon, ImageContent, Message, ResourceLink, TextContent
+    AudioContent, EmbeddedResource, Icon, ImageContent, ResourceLink, TextContent
 )
 
 
@@ -115,18 +115,6 @@ def test_embedded_resource_blob() -> None:
 def test_embedded_resource_text_xor_blob(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValueError, match="exactly one"):
         EmbeddedResource("resource://example", **kwargs)  # type: ignore[call-overload]
-
-
-def test_message_roles() -> None:
-    assert Message(TextContent("hi"))._to_wire() == {
-        "role": "user",
-        "content": {"type": "text", "text": "hi"},
-    }
-    assert Message(TextContent("yo"), role="assistant")._to_wire() == {
-        "role": "assistant",
-        "content": {"type": "text", "text": "yo"},
-    }
-
 
 def test_content_immutable() -> None:
     content = TextContent("hi")

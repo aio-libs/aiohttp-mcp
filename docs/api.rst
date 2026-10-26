@@ -40,6 +40,8 @@ Prompts
 
 .. autoclass:: aiohttp_mcp.Prompt
 
+.. autoclass:: aiohttp_mcp.Message
+
 .. autoclass:: aiohttp_mcp.Doc
 
 .. autotype:: PromptHandler
@@ -56,14 +58,18 @@ Prompts
 
 .. _aiohttp-mcp-content-types:
 
-Message content
-+++++++++++++++
+Content
+=======
 
-This section defines all the message content types that can be returned as a prompt.
-Simple handlers can return a single :class:`str` which will be converted to a
-:class:`~aiohttp_mcp.TextContent`, others must return a sequence of the below classes, like::
+The content blocks that make up unstructured results: returned from tools and
+prompts. Simple handlers can return a single :class:`str`, which is converted to a
+:class:`~aiohttp_mcp.TextContent`, others must return a sequence of the classes
+below, like::
 
     return [ImageContent.from_file(Path("foo/bar.jpeg")), TextContent("Check the image")]
+
+In prompt messages, bare content blocks become ``user`` messages; wrap a
+block in a :class:`Message` for other roles.
 
 .. autoclass:: aiohttp_mcp.Content()
 
@@ -75,9 +81,8 @@ Simple handlers can return a single :class:`str` which will be converted to a
 
 .. autoclass:: aiohttp_mcp.ResourceLink
 
-.. autoclass:: aiohttp_mcp.EmbeddedResource
+.. autoclass:: aiohttp_mcp.EmbeddedResource()
 
-.. autoclass:: aiohttp_mcp.Message
 
 Resources
 =========

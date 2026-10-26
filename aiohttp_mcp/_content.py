@@ -189,8 +189,7 @@ class ResourceLink(Content):
 class EmbeddedResource(Content):
     """A server resource embedded directly into a message.
 
-    Exactly one of ``text`` (a text resource) or ``blob`` (a binary resource),
-    must be given.
+    Do not create directly. Use :meth:`.MCPRequest.embed_resource`.
     """
 
     uri: str
@@ -252,20 +251,3 @@ class EmbeddedResource(Content):
             wire["annotations"] = annotations
         return wire
 
-
-@dataclass(frozen=True, slots=True)
-class Message:
-    """One message of a prompt, with an explicit role.
-
-    Bare content blocks returned from a prompt function become ``user``
-    messages (indicating that the user produced the message).
-    Wrap them in a ``Message`` for other roles::
-
-        Message(TextContent("Of course!"), role="assistant")
-    """
-
-    content: Content
-    role: _protocol.Role = "user"
-
-    def _to_wire(self) -> _protocol.PromptMessage:
-        return {"role": self.role, "content": self.content._to_wire()}

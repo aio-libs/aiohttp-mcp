@@ -346,3 +346,14 @@ async def test_unannotated_first_param_is_an_argument(make_client: MakeClient) -
     assert result["messages"][0]["content"]["text"] == "a/b"
 
 
+
+
+def test_message_roles() -> None:
+    assert Message(TextContent("hi"))._to_wire() == {
+        "role": "user",
+        "content": {"type": "text", "text": "hi"},
+    }
+    assert Message(TextContent("yo"), role="assistant")._to_wire() == {
+        "role": "assistant",
+        "content": {"type": "text", "text": "yo"},
+    }

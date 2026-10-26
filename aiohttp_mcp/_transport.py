@@ -21,6 +21,7 @@ from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
 
 from ._auth import TOKEN_INFO_KEY, TokenInfo, _AuthError
+from ._content import EmbeddedResource
 from ._elicitation import (
     Elicitation,
     ElicitResult,
@@ -148,6 +149,21 @@ class MCPRequest:
         if isinstance(elicitation, SecureFormElicitation):
             return await _secure_form_result(self, key, elicitation, response, state)
         return _parse_result(key, response, elicitation)
+
+    async def embed_resource(self, uri: str) -> list[EmbeddedResource]:
+        """Embed the contents of a registered resource into a result.
+
+        Reads the resource (or resource template) matching ``uri`` from the
+        registry passed to :func:`.setup` and returns its
+        contents as :class:`.EmbeddedResource` blocks.
+
+        Raises :exc:`LookupError` if no resources are configured or nothing
+        matches ``uri``.
+        """
+        registry = self._server._resources
+        if registry is None:
+            raise LookupError("no resources are configured")
+        return await registry._embed(self, uri)
 
     async def _emit(self, message: JSONRPCNotification) -> None:
         if self._resp is None:
