@@ -17,14 +17,16 @@ from typing import (
     Generic,
     Literal,
     NotRequired,
-    Required,
+    TypedDict,
     TypeVar,
     Union,
     get_args,
     get_origin,
     get_type_hints,
-    is_typeddict,
 )
+
+from pydantic import PydanticSchemaGenerationError, TypeAdapter, ValidationError
+from pydantic.json_schema import GenerateJsonSchema
 
 if sys.version_info >= (3, 12):
     from typing import TypeAliasType
@@ -32,19 +34,17 @@ else:
     from typing_extensions import TypeAliasType
 
 from ._content import Content, Icon
-from ._handlers import Doc, Header, _Parameter, _apply_details, _derive_name, _inspect_handler
+from ._handlers import _Parameter, _apply_details, _derive_name, _inspect_handler
 from ._protocol import (
     HEADER_MISMATCH,
     INTERNAL_ERROR,
     INVALID_PARAMS,
     CallToolResult,
-    ContentBlock,
     ListToolsResult,
     MCPError,
     ToolAnnotations,
     ToolInfo,
     _InputSchema,
-    _OutputSchema,
     decode_header_value,
 )
 from ._transport import MCPRequest, logger
@@ -158,181 +158,107 @@ class RateLimiter:
         return 0.0
 
 
-def _schema_error(context: str, hint: object) -> ValueError:
-    return ValueError(f"Unsupported type hint {hint!r} for {context}")
+class _SchemaGenerator(GenerateJsonSchema):
+    """Generates draft 2020-12 schemas without pydantic's per-field titles."""
+
+    def field_title_should_be_set(self, schema: object) -> bool:
+        return False
 
 
-def _json_schema(hint: object, context: str) -> dict[str, object]:
-    """Derive the JSON Schema fragment for a supported type hint."""
-    description = None
-    if get_origin(hint) in {Required, NotRequired}:
-        hint = get_args(hint)[0]
-    if get_origin(hint) is Annotated:
-        hint, *metadata = get_args(hint)
-        description = next((m.documentation for m in metadata if isinstance(m, Doc)), None)
-    schema = _json_schema_bare(hint, context)
-    if description is not None:
-        schema["description"] = description
+# TODO(PY315): Replace type with TypeForm.
+def _adapter(hint: type[_T], context: str) -> TypeAdapter[_T]:
+    try:
+        return TypeAdapter(hint)
+    except PydanticSchemaGenerationError:
+        raise ValueError(f"Unsupported type hint {hint!r} for {context}")
+
+
+class _ArgumentsParams(TypedDict):
+    arguments: NotRequired[Mapping[str, object]]
+
+
+class _ArgumentsBody(TypedDict):
+    params: NotRequired[_ArgumentsParams]
+
+
+def _json_schema(
+    adapter: TypeAdapter[object], defs: dict[str, object], context: str
+) -> dict[str, object]:
+    """The JSON Schema fragment for ``adapter``.
+
+    Definitions of named types are hoisted into ``defs``, to be placed at the
+    root of the schema document the fragment ends up in (where their
+    ``#/$defs/...`` pointers resolve).
+    """
+    schema = adapter.json_schema(schema_generator=_SchemaGenerator)
+    for name, definition in schema.pop("$defs", {}).items():
+        if defs.setdefault(name, definition) != definition:
+            raise ValueError(f"conflicting schema definitions named {name!r} for {context}")
     return schema
 
 
-def _json_type(value: object) -> str:
-    """The JSON Schema type name of a Literal member (bool before int)."""
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, int):
-        return "integer"
-    return "string"
+def _format_loc(loc: tuple[int | str, ...]) -> str:
+    """Render an error location, stripping the body-envelope prefix."""
+    if loc[:2] == ("params", "arguments") and len(loc) > 2:
+        loc = loc[2:]
+    head, *rest = loc
+    return str(head) + "".join(f"[{p}]" if isinstance(p, int) else f".{p}" for p in rest)
 
 
-def _json_schema_bare(hint: object, context: str) -> dict[str, object]:
-    if hint is Any or hint is object:
-        # Any JSON value: the empty schema places no constraints.
-        return {}
-    origin = get_origin(hint)
-    if origin is None:
-        # A bare type (no subscription).
-        if not isinstance(hint, type):
-            raise _schema_error(context, hint)
-        if hint is str:
-            return {"type": "string"}
-        if hint is int:
-            return {"type": "integer"}
-        if hint is float:
-            return {"type": "number"}
-        if hint is bool:
-            return {"type": "boolean"}
-        if hint is types.NoneType:
-            return {"type": "null"}
-        if is_typeddict(hint):
-            properties = {
-                k: _json_schema(v, f"{context}.{k}")
-                for k, v in get_type_hints(hint, include_extras=True).items()
-            }
-            schema: dict[str, object] = {"type": "object", "properties": properties}
-            # https://github.com/python/typing/issues/1395
-            if required := sorted(hint.__required_keys__):  # type: ignore[attr-defined]
-                schema["required"] = required
-            return schema
-        raise _schema_error(context, hint)
-    if origin is Literal:
-        values = get_args(hint)
-        if not all(isinstance(v, (str, int, bool)) or v is None for v in values):
-            raise _schema_error(context, hint)
-        enum_schema: dict[str, object] = {"enum": tuple(values)}
-        kinds = {_json_type(v) for v in values}
-        if len(kinds) == 1:
-            enum_schema = {"type": next(iter(kinds)), **enum_schema}
-        return enum_schema
-    if origin is types.UnionType:
-        return {"anyOf": [_json_schema(arg, context) for arg in get_args(hint)]}
-    if origin is tuple:
-        args = get_args(hint)
-        if len(args) == 2 and args[1] is Ellipsis:
-            return {"type": "array", "items": _json_schema(args[0], context)}
-        if args and Ellipsis not in args:
-            return {
-                "type": "array",
-                "prefixItems": [
-                    _json_schema(arg, f"{context}[{i}]") for i, arg in enumerate(args)
-                ],
-                "items": False,
-                "minItems": len(args),
-                "maxItems": len(args),
-            }
-        raise _schema_error(context, hint)
-    if isinstance(origin, type):
-        if issubclass(origin, Sequence):
-            args = get_args(hint)
-            if len(args) != 1:
-                raise _schema_error(context, hint)
-            return {"type": "array", "items": _json_schema(args[0], context)}
-        if issubclass(origin, Mapping):
-            args = get_args(hint)
-            if len(args) != 2 or args[0] is not str:
-                raise _schema_error(context, hint)
-            return {"type": "object", "additionalProperties": _json_schema(args[1], context)}
-    raise _schema_error(context, hint)
+def _convert_arguments(
+    spec: _ToolSpec, ctx: MCPRequest, arguments: Mapping[str, object]
+) -> dict[str, object]:
+    """Validate the call's arguments, returning their converted forms.
+
+    The adapter wraps the ``params.arguments`` path of the request body, so
+    validation reads the raw JSON directly: values must already have the
+    schema's JSON type (no ``"5"`` -> 5 or ``5.0`` -> 5 coercion, and
+    booleans are never numbers), while conversions that exist only *because*
+    the wire format is JSON remain available - ``int`` is accepted for a
+    number, and string-encoded types such as ``datetime`` parse from their
+    JSON representation.
+    """
+    try:
+        params = spec.adapter.validate_json(ctx._body, strict=True)
+    except ValidationError as exc:
+        problems = [
+            f"{_format_loc(e['loc'])}: {e['msg']}" for e in exc.errors(include_url=False)
+        ]
+        raise ValueError("; ".join(problems)) from None
+    converted = dict(params.get("params", {}).get("arguments", {}))
+    for key, value in arguments.items():
+        if key in converted:
+            _reject_narrowing(value, converted[key], key, "")
+    return converted
 
 
-def _validate_json(hint: object, value: object, context: str) -> None:
-    """Check ``value`` against the schema grammar; raises ValueError."""
-    if get_origin(hint) in {Required, NotRequired}:
-        hint = get_args(hint)[0]
-    if get_origin(hint) is Annotated:
-        hint = get_args(hint)[0]
-    if hint is Any or hint is object:
-        pass  # Any JSON value.
-    elif hint is str:
-        if not isinstance(value, str):
-            raise ValueError(f"{context}: expected a string")
-    elif hint is int:
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError(f"{context}: expected an integer")
-    elif hint is float:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError(f"{context}: expected a number")
-    elif hint is bool:
-        if not isinstance(value, bool):
-            raise ValueError(f"{context}: expected a boolean")
-    elif hint is types.NoneType or hint is None:
-        if value is not None:
-            raise ValueError(f"{context}: expected null")
-    elif is_typeddict(hint):
-        assert isinstance(hint, type)
-        if not isinstance(value, Mapping):
-            raise ValueError(f"{context}: expected an object")
-        hints = get_type_hints(hint, include_extras=True)
-        # https://github.com/python/typing/issues/1395
-        if missing := hint.__required_keys__ - value.keys():  # type: ignore[attr-defined]
-            raise ValueError(f"{context}: missing {', '.join(sorted(missing))}")
-        for key, key_hint in hints.items():
-            if key in value:
-                _validate_json(key_hint, value[key], f"{context}.{key}")
-    elif (origin := get_origin(hint)) is Literal:
-        # Type-aware membership: 1 == True in Python, but not in JSON Schema.
-        if not any(
-            type(value) is type(option) and value == option
-            for option in get_args(hint)
-        ):
-            raise ValueError(f"{context}: not one of the allowed values")
-    elif origin is types.UnionType:
-        for arg in get_args(hint):
-            try:
-                _validate_json(arg, value, context)
-            except ValueError:
-                continue
-            return
-        raise ValueError(f"{context}: does not match any allowed type")
-    elif origin is tuple and not (
-        len(tuple_args := get_args(hint)) == 2 and tuple_args[1] is Ellipsis
+def _reject_narrowing(original: object, validated: object, context: str, path: str) -> None:
+    """Reject the numeric narrowing pydantic's ``Literal`` matching permits.
+
+    The base number types are strict, but ``Literal`` members are matched by
+    equality, so a JSON ``true`` or ``1.0`` would otherwise satisfy
+    ``Literal[1]`` (JSON Schema's ``enum``/``const`` compare types too).
+    Comparing the JSON type of the input with the validated value catches
+    such narrowing at any depth, without re-implementing validation.
+    """
+    if isinstance(original, (bool, int, float)) and isinstance(validated, (bool, int, float)):
+        narrowed = isinstance(original, bool) is not isinstance(validated, bool) or (
+            isinstance(original, float) and isinstance(validated, int)
+        )
+        if narrowed:
+            raise ValueError(f"{context}{path}: Input has the wrong JSON type")
+    elif isinstance(original, Mapping) and isinstance(validated, Mapping):
+        for key, item in validated.items():
+            if isinstance(key, str) and key in original:
+                _reject_narrowing(original[key], item, context, f"{path}.{key}")
+    elif (
+        isinstance(original, Sequence)
+        and isinstance(validated, Sequence)
+        and not isinstance(original, (str, bytes))
+        and not isinstance(validated, (str, bytes))
     ):
-        # A fixed-shape tuple (prefixItems).
-        if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-            raise ValueError(f"{context}: expected an array")
-        if len(value) != len(tuple_args):
-            raise ValueError(f"{context}: expected {len(tuple_args)} items")
-        for index, (item_hint, item) in enumerate(zip(tuple_args, value)):
-            _validate_json(item_hint, item, f"{context}[{index}]")
-    elif origin is tuple or (isinstance(origin, type) and issubclass(origin, Sequence)):
-        # Handlers may legitimately return tuples for array-typed results.
-        if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-            raise ValueError(f"{context}: expected an array")
-        item_hint = get_args(hint)[0]
-        for index, item in enumerate(value):
-            _validate_json(item_hint, item, f"{context}[{index}]")
-    elif isinstance(origin, type) and issubclass(origin, Mapping):
-        if not isinstance(value, Mapping):
-            raise ValueError(f"{context}: expected an object")
-        value_hint = get_args(hint)[1]
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise ValueError(f"{context}: object keys must be strings")
-            _validate_json(value_hint, item, f"{context}.{key}")
-    else:
-        raise ValueError(f"{context}: unsupported type")
+        for index, (item, validated_item) in enumerate(zip(original, validated)):
+            _reject_narrowing(item, validated_item, context, f"{path}[{index}]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,7 +315,9 @@ class _ToolSpec:
     tool: Tool
     info: ToolInfo
     wants_request: bool
-    arguments: Mapping[str, object]
+    parameters: frozenset[str]
+    # Validates ``params.arguments`` within the raw request body.
+    adapter: TypeAdapter[_ArgumentsBody]
     required: frozenset[str]
     structured: object | None
     # Parameter name to ``Mcp-Param-*`` header name (``x-mcp-header``).
@@ -423,13 +351,16 @@ def _build_spec(tool: Tool) -> _ToolSpec:
     hints = get_type_hints(tool.handler, include_extras=True)
 
     properties: dict[str, object] = {}
-    arguments: dict[str, object] = {}
+    defs: dict[str, object] = {}
+    argument_hints: dict[str, object] = {}
     required = set()
     headers: dict[str, str] = {}
     signature_defaults = _defaults(tool.handler)
     for parameter in parameters:
         hint = Any if parameter.hint is inspect.Parameter.empty else parameter.hint
-        schema = _json_schema(hint, f"{name}.{parameter.name}")
+        context = f"{name}.{parameter.name}"
+        adapter = _adapter(hints.get(parameter.name, hint), context)
+        schema = _json_schema(adapter, defs, context)
         if parameter.documentation is not None:
             schema["description"] = parameter.documentation
         if parameter.header is not None:
@@ -445,11 +376,13 @@ def _build_spec(tool: Tool) -> _ToolSpec:
             else:
                 schema["default"] = default
         properties[parameter.name] = schema
-        arguments[parameter.name] = hint
+        argument_hints[parameter.name] = NotRequired[hints.get(parameter.name, hint)]
         if parameter.required:
             required.add(parameter.name)
     # https://github.com/python/mypy/issues/18176
     input_schema: _InputSchema = {"type": "object", "additionalProperties": False}  # type: ignore[typeddict-unknown-key]
+    if defs:
+        input_schema["$defs"] = defs  # type: ignore[typeddict-unknown-key]
     if properties:
         input_schema["properties"] = properties  # type: ignore[typeddict-unknown-key]
     if required:
@@ -479,7 +412,7 @@ def _build_spec(tool: Tool) -> _ToolSpec:
             return_hint = Union[tuple(remaining)]  # noqa: UP007
         else:
             return_hint = ToolResult if ToolResult in union_args else types.NoneType
-    structured: object | None = None
+    structured: type[object] | None = None
     if return_hint not in {
         str, inspect.Parameter.empty, types.NoneType, ToolResult, Any, object
     } and not _is_content_hint(return_hint):
@@ -488,15 +421,26 @@ def _build_spec(tool: Tool) -> _ToolSpec:
     info: ToolInfo = {"name": name, "inputSchema": input_schema}
     _apply_details(info, tool)
     if structured is not None:
+        output_defs: dict[str, object] = {}
+        output_context = f"{name} return value"
+        output_schema = _json_schema(
+            _adapter(structured, output_context), output_defs, output_context
+        )
+        if output_defs:
+            output_schema["$defs"] = output_defs
         # https://github.com/python/mypy/issues/18176
-        info["outputSchema"] = _json_schema(structured, f"{name} return value")  # type: ignore[typeddict-item]
+        info["outputSchema"] = output_schema  # type: ignore[typeddict-item]
     if annotations := tool._annotations():
         info["annotations"] = annotations
+    _Arguments = TypedDict("_Arguments", argument_hints)  # type: ignore[misc]
+    _Params = TypedDict("_Params", {"arguments": NotRequired[_Arguments]})
+    _Body = TypedDict("_Body", {"params": NotRequired[_Params]})
     return _ToolSpec(
         tool=tool,
         info=info,
         wants_request=wants_request,
-        arguments=arguments,
+        parameters=frozenset(argument_hints),
+        adapter=TypeAdapter(_Body),
         required=frozenset(required),
         structured=structured,
         headers=headers,
@@ -657,21 +601,20 @@ class ToolRegistry:
         _enforce_param_headers(ctx, spec, arguments)
         # Value-level problems are execution errors reported in the result,
         # giving the model actionable feedback to self-correct with.
-        if unknown := arguments.keys() - spec.arguments.keys():
+        if unknown := arguments.keys() - spec.parameters:
             return _error_result(f"Unexpected arguments: {', '.join(sorted(unknown))}")
         if missing := spec.required - arguments.keys():
             return _error_result(f"Missing required arguments: {', '.join(sorted(missing))}")
-        for key, value in arguments.items():
-            try:
-                _validate_json(spec.arguments[key], value, key)
-            except ValueError as exc:
-                return _error_result(f"Invalid arguments: {exc}")
+        try:
+            converted = _convert_arguments(spec, ctx, arguments)
+        except ValueError as exc:
+            return _error_result(f"Invalid arguments: {exc}")
 
         try:
             if spec.wants_request:
-                result = await spec.tool.handler(ctx, **arguments)
+                result = await spec.tool.handler(ctx, **converted)
             else:
-                result = await spec.tool.handler(**arguments)
+                result = await spec.tool.handler(**converted)
         except ToolError as exc:
             return _error_result(str(exc))
 

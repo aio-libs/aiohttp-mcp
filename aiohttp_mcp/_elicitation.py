@@ -10,8 +10,10 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Final, Literal, TypeVar
+from functools import lru_cache
+from typing import TYPE_CHECKING, Annotated, ClassVar, Final, Literal, TypeVar, cast
 
+from pydantic import Field, TypeAdapter, ValidationError
 from yarl import URL
 
 from . import _protocol
@@ -39,6 +41,28 @@ _STATE_TTL: Final = 600.0
 _MAX_PENDING_FORMS: Final = 1024
 _FORM_WAIT: Final = 10.0
 _WireT = TypeVar("_WireT", bound=_protocol._SchemaCommon)
+_T = TypeVar("_T")
+
+
+# TODO(PY315): Replace type with TypeForm
+@lru_cache(maxsize=1024)  # https://github.com/python/typeshed/issues/6347
+def _adapter(hint: type[_T]) -> TypeAdapter[_T]:  # type: ignore[misc]
+    return TypeAdapter(hint)
+
+
+# TODO(PY315): Replace type with TypeForm
+def _check(hint: type[_T], value: object) -> _T:
+    """Validate a submitted JSON value; raises ValueError when it does not fit.
+
+    pydantic's strict mode matches JSON Schema semantics for every type a
+    form field can use (no ``"5"`` -> 5 or ``5.0`` -> 5 coercion; booleans
+    are never numbers), so the parsed value is validated directly.
+    """
+    try:
+        # https://github.com/python/mypy/issues/11470
+        return _adapter(hint).validate_python(value, strict=True)  # type: ignore[arg-type,no-any-return]
+    except ValidationError as exc:
+        raise ValueError(exc.errors(include_url=False)[0]["msg"]) from None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -98,13 +122,8 @@ class StringSchema(FieldSchema):
         return self._common_wire(wire)
 
     def _validate(self, value: object) -> str:
-        if not isinstance(value, str):
-            raise ValueError("expected a string")
-        if self.min_length is not None and len(value) < self.min_length:
-            raise ValueError(f"shorter than {self.min_length}")
-        if self.max_length is not None and len(value) > self.max_length:
-            raise ValueError(f"longer than {self.max_length}")
-        return value
+        hint = Annotated[str, Field(min_length=self.min_length, max_length=self.max_length)]
+        return _check(hint, value)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -131,13 +150,7 @@ class IntegerSchema(FieldSchema):
         return self._common_wire(wire)
 
     def _validate(self, value: object) -> int:
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError("expected an integer")
-        if self.minimum is not None and value < self.minimum:
-            raise ValueError(f"less than {self.minimum}")
-        if self.maximum is not None and value > self.maximum:
-            raise ValueError(f"greater than {self.maximum}")
-        return value
+        return _check(Annotated[int, Field(ge=self.minimum, le=self.maximum)], value)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -164,13 +177,7 @@ class NumberSchema(FieldSchema):
         return self._common_wire(wire)
 
     def _validate(self, value: object) -> float:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError("expected a number")
-        if self.minimum is not None and value < self.minimum:
-            raise ValueError(f"less than {self.minimum}")
-        if self.maximum is not None and value > self.maximum:
-            raise ValueError(f"greater than {self.maximum}")
-        return value
+        return _check(Annotated[float, Field(ge=self.minimum, le=self.maximum)], value)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -189,9 +196,7 @@ class BooleanSchema(FieldSchema):
         return self._common_wire(wire)
 
     def _validate(self, value: object) -> bool:
-        if not isinstance(value, bool):
-            raise ValueError("expected a boolean")
-        return value
+        return _check(bool, value)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -224,9 +229,7 @@ class EnumSchema(FieldSchema):
         return self._common_wire(wire)
 
     def _validate(self, value: object) -> str:
-        if not isinstance(value, str) or value not in self.options:
-            raise ValueError("not one of the allowed options")
-        return value
+        return _check(Literal[tuple(self.options)], value)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -276,18 +279,12 @@ class MultiSelectEnumSchema(FieldSchema):
         return self._common_wire(wire)
 
     def _validate(self, value: object) -> tuple[str, ...]:
-        if not isinstance(value, list):
-            raise ValueError("not a list of options")
-        selected: list[str] = []
-        for item in value:
-            if not isinstance(item, str) or item not in self.options:
-                raise ValueError("not one of the allowed options")
-            selected.append(item)
-        if self.min_items is not None and len(selected) < self.min_items:
-            raise ValueError(f"fewer than {self.min_items} selections")
-        if self.max_items is not None and len(selected) > self.max_items:
-            raise ValueError(f"more than {self.max_items} selections")
-        return tuple(selected)
+        # Static typing can't work here, this is for runtime typing only.
+        hint = Annotated[  # type: ignore[valid-type]
+            list[Literal[tuple(self.options)]],  # type: ignore[misc]
+            Field(min_length=self.min_items, max_length=self.max_items),
+        ]
+        return tuple(_check(hint, value))  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

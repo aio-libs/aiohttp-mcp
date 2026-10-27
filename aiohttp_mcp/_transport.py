@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
+from pydantic_core import from_json
 
 from ._auth import TOKEN_INFO_KEY, TokenInfo, _AuthError
 from ._content import EmbeddedResource
@@ -76,6 +77,7 @@ class MCPRequest:
     """An in-flight MCP request, as seen by a method handler."""
 
     __slots__ = {
+        "_body": None,
         "_form_tickets": None,
         "_input_responses": None,
         "_request_state": None,
@@ -103,6 +105,7 @@ class MCPRequest:
         http: web.Request,
         *,
         server: "MCPServer",
+        body: bytes,
         input_responses: Mapping[str, object] | None = None,
         request_state: str | None = None,
     ) -> None:
@@ -113,6 +116,9 @@ class MCPRequest:
         self.http = http
         self.state: object = None
         self._server = server
+        # The raw request body, so that typed validation (tool arguments)
+        # can read the wire JSON itself rather than a reserialisation.
+        self._body = body
         self._input_responses = input_responses
         self._request_state = request_state
         self._responses: Mapping[str, object] = input_responses or {}
@@ -268,8 +274,9 @@ async def _serve_request(server: MCPServer, request: web.Request) -> web.StreamR
     error: MCPError | None = None
     try:
         try:
-            message = await request.json()
-        except (json.JSONDecodeError, UnicodeDecodeError):
+            body = await request.read()
+            message = from_json(body)
+        except ValueError:
             raise MCPError(PARSE_ERROR, "Parse error") from None
         request_id, params = _validate_message(message)
         if message["method"] == "initialize":
@@ -299,6 +306,7 @@ async def _serve_request(server: MCPServer, request: web.Request) -> web.StreamR
             meta,
             request,
             server=server,
+            body=body,
             input_responses=input_responses,
             request_state=request_state,
         )

@@ -262,6 +262,15 @@ async def test_parse_error(make_client: MakeClient) -> None:
     assert "id" not in body
 
 
+async def test_parse_error_non_utf8(make_client: MakeClient) -> None:
+    """JSON must be UTF-8, whatever charset a client declares."""
+    client = await make_client()
+    headers = request_headers("server/discover")
+    headers["Content-Type"] = "application/json; charset=latin-1"
+    async with client.post("/mcp", data=b'{"m\xe9thod": 1}', headers=headers) as resp:
+        await assert_error(resp, 400, -32700)
+
+
 async def test_non_post(make_client: MakeClient) -> None:
     client = await make_client()
     for method in ("GET", "DELETE", "PUT"):

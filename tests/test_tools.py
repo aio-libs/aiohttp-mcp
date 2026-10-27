@@ -1,3 +1,6 @@
+import datetime
+import enum
+import functools
 from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager
 from typing import Annotated, Any, Literal, NotRequired, TypedDict, cast
@@ -7,14 +10,17 @@ import pytest
 from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
+from pydantic import Field
 
 from aiohttp_mcp import (
+    Authorization,
     Doc,
     MCPRequest,
     RateLimiter,
     TextContent,
     Tool,
     ToolError,
+    TokenInfo,
     ToolRegistry,
     ToolResult,
 )
@@ -105,12 +111,13 @@ async def test_list(make_client: MakeClient) -> None:
             },
             "outputSchema": {
                 "type": "object",
+                "title": "Forecast",
                 "properties": {
                     "temperature": {"type": "number"},
                     "conditions": {"type": "string"},
                     "humidity": {"type": "integer"},
                 },
-                "required": ["conditions", "temperature"],
+                "required": ["temperature", "conditions"],
             },
         }
     ]
@@ -207,7 +214,7 @@ async def test_nested_any(make_client: MakeClient) -> None:
     client = await make_client(tools=ToolRegistry(store))
     async with post(client, "tools/list") as resp:
         schema = (await result_of(resp))["tools"][0]["inputSchema"]
-    assert schema["properties"]["blob"] == {"type": "object", "additionalProperties": {}}
+    assert schema["properties"]["blob"] == {"type": "object", "additionalProperties": True}
     async with call(client, "store", {"blob": {"a": 1, "b": [True]}}) as resp:
         assert (await result_of(resp))["content"][0]["text"] == "2"
     async with call(client, "store", {"blob": "nope"}) as resp:
@@ -310,7 +317,6 @@ async def test_fixed_tuple(make_client: MakeClient) -> None:
     assert schema["properties"]["point"] == {
         "type": "array",
         "prefixItems": [{"type": "number"}, {"type": "number"}],
-        "items": False,
         "minItems": 2,
         "maxItems": 2,
     }
@@ -421,9 +427,9 @@ async def test_tool_error(make_client: MakeClient) -> None:
 @pytest.mark.parametrize(
     ("arguments", "message"),
     (
-        ({"location": 5}, "expected a string"),
+        ({"location": 5}, "location: Input should be a valid string"),
         ({}, "Missing required arguments: location"),
-        ({"location": "York", "units": "K"}, "not one of the allowed values"),
+        ({"location": "York", "units": "K"}, "units: Input should be 'C' or 'F'"),
         ({"location": "York", "shoe_size": 9}, "Unexpected arguments: shoe_size"),
     ),
 )
@@ -535,12 +541,19 @@ async def test_registry_config_errors() -> None:
         ToolRegistry(ttl=-1.0)
 
 
-async def test_unrepresentable_literal_rejected() -> None:
-    async def bad(mode: Literal[b'raw']) -> str:
-        return ""
+async def test_bytes_literal_is_uncallable(make_client: MakeClient) -> None:
+    """A bytes literal cannot be satisfied from JSON; avoid it in tools."""
+    async def download(mode: Literal[b"raw"]) -> str:
+        return mode.decode()
 
-    with pytest.raises(ValueError):
-        ToolRegistry(bad)
+    client = await make_client(tools=ToolRegistry(download))
+    async with post(client, "tools/list") as resp:
+        schema = (await result_of(resp))["tools"][0]["inputSchema"]
+    assert schema["properties"]["mode"] == {"const": "raw", "type": "string"}
+    async with call(client, "download", {"mode": "raw"}) as resp:
+        result = await result_of(resp)
+    assert result["isError"] is True
+    assert "mode: Input should be b'raw'" in result["content"][0]["text"]
 
 
 # - Rate limiting -------------------------------------------------------------
@@ -705,3 +718,155 @@ async def test_rate_limiter_acquire_subclass(make_client: MakeClient) -> None:
         result = await result_of(resp)
     assert result["isError"] is True
     assert "42 seconds" in result["content"][0]["text"]
+
+
+# - pydantic strictness: JSON types must match the schema exactly -------------
+
+
+class Point(TypedDict):
+    x: int
+    y: float
+
+
+async def typed(
+    i: int,
+    f: float,
+    b: bool,
+    s: str,
+    level: Literal[1, 2, 4],
+    point: Point | None = None,
+    floats: list[float] | None = None,
+) -> None:
+    """Typed. Accepts one of everything."""
+
+
+@pytest.mark.parametrize(
+    ("arguments", "rejected"),
+    (
+        # No implicit numeric conversions.
+        ({"i": 1.0}, "i"),  # float -> int, even when lossless
+        ({"i": "5"}, "i"),  # str -> int
+        ({"i": True}, "i"),  # bool -> int
+        ({"f": True}, "f"),  # bool -> float
+        ({"f": "1.5"}, "f"),  # str -> float
+        ({"b": 1}, "b"),  # int -> bool
+        ({"b": "true"}, "b"),  # str -> bool
+        ({"s": 5}, "s"),  # int -> str
+        # int -> float is not a conversion: JSON has one number type.
+        ({"f": 1}, None),
+        # Literals compare JSON types too, at any depth (pydantic alone
+        # would accept these, matching by equality).
+        ({"level": True}, "level"),
+        ({"level": 1.0}, "level"),
+        # ... and the same strictness applies inside nested values.
+        ({"point": {"x": 1.0, "y": 2.0}}, "point.x"),
+        ({"point": {"x": True, "y": 2.0}}, "point.x"),
+        ({"point": {"x": 1, "y": 2}}, None),  # int -> float fine nested too
+        ({"floats": [1, "2"]}, "floats[1]"),
+        ({"floats": [1, False]}, "floats[1]"),
+    ),
+)
+async def test_json_type_strictness(
+    make_client: MakeClient, arguments: dict[str, object], rejected: str | None
+) -> None:
+    client = await make_client(tools=ToolRegistry(typed))
+    full = {"i": 0, "f": 0.5, "b": False, "s": "", "level": 2, **arguments}
+    async with call(client, "typed", full) as resp:
+        result = await result_of(resp)
+    if rejected is None:
+        assert "isError" not in result, result
+    else:
+        assert result["isError"] is True
+        assert rejected in result["content"][0]["text"]
+
+
+async def test_annotated_constraints(make_client: MakeClient) -> None:
+    async def resize(
+        width: Annotated[int, Field(gt=0)],
+        tags: Annotated[list[str], Field(max_length=2)] = [],
+    ) -> str:
+        return f"{width}:{','.join(tags)}"
+
+    client = await make_client(tools=ToolRegistry(resize))
+    async with post(client, "tools/list") as resp:
+        schema = (await result_of(resp))["tools"][0]["inputSchema"]
+    assert schema["properties"]["width"] == {"type": "integer", "exclusiveMinimum": 0}
+    assert schema["properties"]["tags"] == {
+        "type": "array",
+        "items": {"type": "string"},
+        "maxItems": 2,
+        "default": [],
+    }
+    async with call(client, "resize", {"width": 0}) as resp:
+        result = await result_of(resp)
+    assert result["isError"] is True
+    assert "width: Input should be greater than 0" in result["content"][0]["text"]
+    async with call(client, "resize", {"width": 2, "tags": ["a", "b", "c"]}) as resp:
+        assert (await result_of(resp))["isError"] is True
+    async with call(client, "resize", {"width": 2, "tags": ["a"]}) as resp:
+        assert (await result_of(resp))["content"][0]["text"] == "2:a"
+
+
+async def test_string_encoded_types_convert(make_client: MakeClient) -> None:
+    async def schedule(at: datetime.datetime) -> str:
+        return repr(at)
+
+    client = await make_client(tools=ToolRegistry(schedule))
+    async with post(client, "tools/list") as resp:
+        schema = (await result_of(resp))["tools"][0]["inputSchema"]
+    assert schema["properties"]["at"] == {"type": "string", "format": "date-time"}
+    async with call(client, "schedule", {"at": "2026-11-01T10:30:00Z"}) as resp:
+        result = await result_of(resp)
+    assert "datetime.datetime(2026, 11, 1, 10, 30" in result["content"][0]["text"]
+    async with call(client, "schedule", {"at": "soon"}) as resp:
+        assert (await result_of(resp))["isError"] is True
+
+
+async def test_nested_typeddict_uses_defs(make_client: MakeClient) -> None:
+    async def chart(points: list[Point]) -> str:
+        return str(len(points))
+
+    client = await make_client(tools=ToolRegistry(chart))
+    async with post(client, "tools/list") as resp:
+        schema = (await result_of(resp))["tools"][0]["inputSchema"]
+    assert schema["properties"]["points"] == {
+        "type": "array", "items": {"$ref": "#/$defs/Point"}
+    }
+    assert schema["$defs"]["Point"] == {
+        "type": "object",
+        "title": "Point",
+        "properties": {"x": {"type": "integer"}, "y": {"type": "number"}},
+        "required": ["x", "y"],
+    }
+    async with call(client, "chart", {"points": [{"x": 1, "y": 2.5}]}) as resp:
+        assert (await result_of(resp))["content"][0]["text"] == "1"
+    async with call(client, "chart", {"points": [{"x": 1.5, "y": 2.5}]}) as resp:
+        assert (await result_of(resp))["isError"] is True
+
+
+async def test_conflicting_defs_rejected() -> None:
+    class Same(TypedDict):
+        a: int
+
+    first = Same
+
+    class Same(TypedDict):  # type: ignore[no-redef]  # noqa: F811
+        a: str
+
+    async def clash(one: list[first], two: list[Same]) -> None:  # type: ignore[valid-type]
+        """Clash. Two different types with one name."""
+
+    with pytest.raises(ValueError, match="conflicting schema definitions"):
+        ToolRegistry(clash)
+
+
+async def test_typeddict_extra_keys_dropped(make_client: MakeClient) -> None:
+    received: dict[str, object] = {}
+
+    async def plot(point: Point) -> None:
+        received.update(point)
+
+    client = await make_client(tools=ToolRegistry(plot))
+    async with call(client, "plot", {"point": {"x": 1, "y": 2.0, "z": 9}}) as resp:
+        assert "isError" not in await result_of(resp)
+    assert received == {"x": 1, "y": 2.0}
