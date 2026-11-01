@@ -34,7 +34,7 @@ SECRET = b"0" * 32
 Client = TestClient[web.Request, web.Application]
 
 
-async def check_credentials(username: str, password: str) -> bool:
+async def check_credentials(username: str, password: str, request: web.Request) -> bool:
     return (username, password) == ("alice", "wonderland")
 
 

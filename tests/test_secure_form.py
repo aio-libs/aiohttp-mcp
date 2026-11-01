@@ -426,7 +426,7 @@ async def test_pending_forms_bounded(aiohttp_client: AiohttpClient) -> None:
 async def test_local_authorization_login_redirect(aiohttp_client: "AiohttpClient") -> None:
     """Unauthenticated users are sent through LocalAuthorization's login."""
 
-    async def check_credentials(username: str, password: str) -> bool:
+    async def check_credentials(username: str, password: str, request: web.Request) -> bool:
         return False
 
     authorization = LocalAuthorization(
@@ -456,7 +456,7 @@ async def test_local_authorization_login_redirect(aiohttp_client: "AiohttpClient
 
 
 async def test_login_redirect_under_sub_application(aiohttp_client: "AiohttpClient") -> None:
-    async def check_credentials(username: str, password: str) -> bool:
+    async def check_credentials(username: str, password: str, request: web.Request) -> bool:
         return False
 
     authorization = LocalAuthorization(

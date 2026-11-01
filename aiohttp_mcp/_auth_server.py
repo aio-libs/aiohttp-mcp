@@ -34,7 +34,9 @@ logger = logging.getLogger("aiohttp_mcp")
 AuthenticateRequest = TypeAliasType(
     "AuthenticateRequest", Callable[[web.Request], Awaitable["str | None"]]
 )
-CheckCredentials = TypeAliasType("CheckCredentials", Callable[[str, str], Awaitable[bool]])
+CheckCredentials = TypeAliasType(
+    "CheckCredentials", Callable[[str, str, web.Request], Awaitable[bool]]
+)
 
 _CIMD_TIMEOUT: Final = ClientTimeout(total=10)
 _CIMD_MAX_SIZE: Final = 64 * 1024
@@ -768,7 +770,7 @@ class LocalAuthorization(Authorization):
         redirect = self._safe_return_url(args.get(self._login_redirect_param))
         username = args.get("username", "")
         if not username or not await self._check_credentials(
-            username, args.get("password", "")
+            username, args.get("password", ""), request
         ):
             return self._render_login_page(redirect, error="Invalid credentials")
 

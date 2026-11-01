@@ -18,7 +18,7 @@ def remote_setup() -> None:
     import aiohttp_mcp
     from aiohttp import web
 
-    async def check_credentials(username: str, password: str) -> bool:
+    async def check_credentials(username: str, password: str, request: web.Request) -> bool:
         return username == "admin" and secrets.compare_digest(
             password, os.environ["MCP_PASSWORD"]
         )

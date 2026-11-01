@@ -9,12 +9,12 @@ from aiohttp import web
 import aiohttp_mcp
 
 
-check_credentials: Callable[[str, str], Awaitable[bool]]
+check_credentials: Callable[[str, str, web.Request], Awaitable[bool]]
 introspect: Callable[[str], Mapping[str, Any]]
 
 
 def self_contained(app: web.Application) -> None:
-    async def check_credentials(username: str, password: str) -> bool:
+    async def check_credentials(username: str, password: str, request: web.Request) -> bool:
         return username == "admin" and secrets.compare_digest(
             password, os.environ["MCP_PASSWORD"]
         )
