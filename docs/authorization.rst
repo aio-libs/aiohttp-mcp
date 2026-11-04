@@ -31,6 +31,13 @@ Self-contained authorization
    :lines: 2-
    :dedent:
 
+.. note::
+
+   :attr:`Request.app <aiohttp.web.Request.app>` will be the
+   :class:`.LocalAuthorization`'s sub-application. Use
+   :attr:`Request.config_dict <aiohttp.web.Request.config_dict>` to access anything
+   stored on the parent app.
+
 Here we have used a callback to verify the username and password from an environment
 variable. We have also loaded a signing key secret from another environment variable and
 set the domain name that this will be available under.
