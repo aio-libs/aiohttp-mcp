@@ -1,9 +1,12 @@
 import asyncio
-from contextlib import AbstractAsyncContextManager
 from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 import pytest
+from aiohttp import ClientResponse, web
+from aiohttp.test_utils import TestClient
+
 from _helpers import (
     META_SUBSCRIPTION_ID,
     MakeClient,
@@ -11,16 +14,12 @@ from _helpers import (
     request_body,
     request_headers,
 )
-from aiohttp import ClientResponse, web
-from aiohttp.test_utils import TestClient
-
 from aiohttp_mcp import (
     Content,
     EmbeddedResource,
     Icon,
     MCPRequest,
     MCPServer,
-    Message,
     PromptRegistry,
     Resource,
     ResourceContents,

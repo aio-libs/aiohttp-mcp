@@ -15,7 +15,7 @@ from collections.abc import (
 )
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
+from typing import TYPE_CHECKING, TypeAlias, cast
 
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
@@ -38,24 +38,19 @@ from ._protocol import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
     INVALID_REQUEST,
-    METHOD_HDR,
-    METHOD_NOT_FOUND,
-    META_CLIENT_CAPABILITIES,
-    META_CLIENT_INFO,
     META_PROTOCOL_VERSION,
     META_SERVER_INFO,
+    METHOD_HDR,
+    METHOD_NOT_FOUND,
     NAME_HDR,
     NAME_HDR_METHODS,
     PARSE_ERROR,
     PROTOCOL_VERSION_HDR,
     PROTOCOL_VERSIONS,
     UNSUPPORTED_PROTOCOL_VERSION,
-    ClientCapabilities,
-    Implementation,
     InputResult,
     JSONRPCErrorResponse,
     JSONRPCNotification,
-    JSONRPCRequest,
     JSONRPCResultResponse,
     MCPError,
     RequestId,
@@ -247,7 +242,7 @@ async def _finish_scopes(gen: "AsyncGenerator[Collection[str], None]") -> None:
     raise RuntimeError("scopes generator yielded more than once")
 
 
-async def handle_request(server: MCPServer, request: web.Request) -> web.StreamResponse:
+async def handle_request(server: "MCPServer", request: web.Request) -> web.StreamResponse:
     origin = request.headers.get("Origin")
     if origin is not None and not server._origin_allowed(origin):
         origin_error = MCPError(INVALID_REQUEST, "Origin not allowed")
@@ -265,7 +260,7 @@ async def handle_request(server: MCPServer, request: web.Request) -> web.StreamR
         return web.json_response(error_envelope(error), status=error.http_status)
 
 
-async def _serve_request(server: MCPServer, request: web.Request) -> web.StreamResponse:
+async def _serve_request(server: "MCPServer", request: web.Request) -> web.StreamResponse:
     request_id: RequestId | None = None
     ctx: MCPRequest | None = None
     method: Method | None = None
@@ -425,7 +420,7 @@ def _validate_headers(
 
 
 async def _basic_request(
-    server: MCPServer, ctx: MCPRequest, method: Method
+    server: "MCPServer", ctx: MCPRequest, method: Method
 ) -> web.StreamResponse:
     """A plain request/response method call (no SSE)."""
     try:
@@ -441,7 +436,7 @@ async def _basic_request(
 
 
 async def _streaming_request(
-    server: MCPServer, ctx: MCPRequest, method: Method
+    server: "MCPServer", ctx: MCPRequest, method: Method
 ) -> web.StreamResponse:
     async with sse_response(
         ctx.http,
@@ -498,7 +493,7 @@ async def _streaming_request(
         return resp
 
 
-def _finalize_result(server: MCPServer, result: InputResult | None) -> Result:
+def _finalize_result(server: "MCPServer", result: InputResult | None) -> Result:
     """Fill in the protocol-mandated result fields the handler left implicit."""
     if result is None:
         result = {}

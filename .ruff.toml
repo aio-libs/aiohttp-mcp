@@ -1,0 +1,10 @@
+src = [".", "tests"]
+line-length = 90
+
+[lint.per-file-ignores]
+# Doc snippets declare helper callables as annotation-only stubs (checked by
+# mypy) and make illustrative assignments that are never read.
+"docs/code/**" = ["F821", "F841"]
+
+[lint.pycodestyle]
+max-line-length = 99

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiohttp-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "MCP (Model Context Protocol) server support for aiohttp"
 readme = "README.rst"
 requires-python = ">=3.11"
@@ -34,9 +34,13 @@ jwt = ["PyJWT[crypto]>=2.8"]
 [project.urls]
 Documentation = "https://aiohttp-mcp.readthedocs.io"
 Repository = "https://github.com/aio-libs/aiohttp-mcp"
+Issues = "https://github.com/aio-libs/aiohttp-mcp/issues"
 
 [tool.setuptools]
 packages = ["aiohttp_mcp"]
+
+[tool.setuptools.dynamic]
+version = {attr = "aiohttp_mcp.__version__"}
 
 [tool.setuptools.package-data]
 aiohttp_mcp = ["py.typed"]

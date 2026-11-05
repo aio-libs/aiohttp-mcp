@@ -1,0 +1,4 @@
+-r requirements.txt
+-r requirements-autofix.txt
+
+mypy==2.4.0

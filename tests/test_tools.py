@@ -1,29 +1,34 @@
 import datetime
-import enum
 import functools
+import sys
 from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager
-from typing import Annotated, Any, Literal, NotRequired, TypedDict, cast
+from typing import Annotated, Any, Literal, NotRequired
 from unittest import mock
 
 import pytest
-from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from pydantic import Field
 
+from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import (
     Authorization,
     Doc,
     MCPRequest,
     RateLimiter,
     TextContent,
+    TokenInfo,
     Tool,
     ToolError,
-    TokenInfo,
     ToolRegistry,
     ToolResult,
 )
+
+if sys.version_info >= (3, 12):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 Client = TestClient[web.Request, web.Application]
 
@@ -783,7 +788,7 @@ async def test_json_type_strictness(
 async def test_annotated_constraints(make_client: MakeClient) -> None:
     async def resize(
         width: Annotated[int, Field(gt=0)],
-        tags: Annotated[list[str], Field(max_length=2)] = [],
+        tags: Annotated[Sequence[str], Field(max_length=2)] = (),
     ) -> str:
         return f"{width}:{','.join(tags)}"
 
@@ -850,7 +855,7 @@ async def test_conflicting_defs_rejected() -> None:
 
     first = Same
 
-    class Same(TypedDict):  # type: ignore[no-redef]  # noqa: F811
+    class Same(TypedDict):  # type: ignore[no-redef]
         a: str
 
     async def clash(one: list[first], two: list[Same]) -> None:  # type: ignore[valid-type]

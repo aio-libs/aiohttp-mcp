@@ -6,17 +6,20 @@ https://modelcontextprotocol.io/specification/2026-07-28
 import base64
 import binascii
 import sys
-from collections.abc import Mapping
-from typing import Final, Literal, NewType, NotRequired, Required, Sequence, TypedDict, cast
+from collections.abc import Mapping, Sequence
+from typing import (
+    Final,
+    Literal,
+    NotRequired,
+    Required,
+    TypedDict,
+    cast,
+)
 
 if sys.version_info >= (3, 13):
     from typing import ReadOnly
 else:
     from typing_extensions import ReadOnly
-if sys.version_info >= (3, 12):
-    from typing import TypeAliasType
-else:
-    from typing_extensions import TypeAliasType
 
 #: Protocol revisions implemented, newest first.
 PROTOCOL_VERSIONS: Final = ("2026-07-28",)

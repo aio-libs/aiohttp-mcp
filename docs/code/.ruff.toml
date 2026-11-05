@@ -1,0 +1,5 @@
+# Doc snippets depict user code, where aiohttp-mcp is a third-party library.
+extend = "../../.ruff.toml"
+
+[lint.isort]
+known-third-party = ["aiohttp_mcp"]

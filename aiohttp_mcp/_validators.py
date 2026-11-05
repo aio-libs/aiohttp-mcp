@@ -3,9 +3,15 @@
 import heapq
 import time
 from collections.abc import AsyncIterator, Sequence
-from typing import Final
 
-from aiohttp import ClientError, ClientSession, ClientTimeout, encode_basic_auth, hdrs, web
+from aiohttp import (
+    ClientError,
+    ClientSession,
+    ClientTimeout,
+    encode_basic_auth,
+    hdrs,
+    web,
+)
 from yarl import URL
 
 from ._auth import Authorization, ScopeMatcher, TokenInfo, _secure_url

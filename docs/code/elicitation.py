@@ -2,10 +2,9 @@ import os
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
 
+import aiohttp_mcp
 from aiohttp import ClientSession, web
 from yarl import URL
-
-import aiohttp_mcp
 
 delete_project: aiohttp_mcp.PromptHandler
 exchange_code: Callable[[str], Awaitable[str]]
@@ -144,7 +143,8 @@ def same_site_endpoint(app: web.Application, authorization: aiohttp_mcp.Authoriz
 
 
 def external_as_login(app: web.Application, authorization: aiohttp_mcp.Authorization) -> None:
-    from aiohttp_session import get_session, new_session, setup as session_setup
+    from aiohttp_session import get_session, new_session
+    from aiohttp_session import setup as session_setup
     from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
     AUTH_URL = URL("https://auth.example/authorize")

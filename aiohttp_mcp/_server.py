@@ -6,12 +6,15 @@ The logic for an MCP server, sans-IO.
 import asyncio
 import secrets
 from collections.abc import Callable, Collection, Mapping
-from ipaddress import ip_address
 from typing import Literal, NoReturn
 
 from aiohttp import web
 from yarl import URL
 
+from ._auth import Authorization
+from ._auth_server import AuthenticateRequest, _Signer
+from ._elicitation import _PendingForm
+from ._prompts import PromptRegistry
 from ._protocol import (
     INVALID_PARAMS,
     META_SUBSCRIPTION_ID,
@@ -23,12 +26,8 @@ from ._protocol import (
     RequestId,
     ServerCapabilities,
     SubscriptionFilter,
-    SubscriptionsListenResult
+    SubscriptionsListenResult,
 )
-from ._auth import Authorization
-from ._auth_server import AuthenticateRequest, _Signer
-from ._elicitation import _PendingForm
-from ._prompts import PromptRegistry
 from ._resources import ResourceRegistry
 from ._secure_form import RenderForm, handle_form, render_form_default
 from ._tools import ToolRegistry

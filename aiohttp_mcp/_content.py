@@ -250,4 +250,3 @@ class EmbeddedResource(Content):
         if annotations := self._annotations():
             wire["annotations"] = annotations
         return wire
-
