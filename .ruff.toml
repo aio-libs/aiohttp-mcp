@@ -1,3 +1,4 @@
+src = [".", "tests"]
 line-length = 90
 
 [lint.per-file-ignores]

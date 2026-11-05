@@ -16,12 +16,12 @@ from typing import NotRequired, TypedDict
 from unittest import mock
 
 import pytest
-from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
+from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import ConsentContext, LocalAuthorization, setup
 from aiohttp_mcp._auth_server import _b64, _Signer
 

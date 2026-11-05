@@ -9,7 +9,6 @@ from typing import Any
 from unittest import mock
 
 import pytest
-from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from multidict import MultiDict
@@ -17,6 +16,7 @@ from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
 import aiohttp_mcp
+from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import (
     AuthenticateRequest,
     Authorization,

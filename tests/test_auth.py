@@ -7,12 +7,12 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 
 import pytest
-from _helpers import MakeClient, next_sse_data, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from multidict import CIMultiDict, MultiDict
 from pytest_aiohttp import AiohttpClient
 
+from _helpers import MakeClient, next_sse_data, request_body, request_headers
 from aiohttp_mcp import (
     Authorization,
     Prompt,

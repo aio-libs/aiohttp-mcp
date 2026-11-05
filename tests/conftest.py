@@ -1,12 +1,12 @@
 from typing import Any
 
 import pytest
-from _helpers import MakeClient
 from aiohttp import web
 from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 
 import aiohttp_mcp
+from _helpers import MakeClient
 
 
 @pytest.fixture
