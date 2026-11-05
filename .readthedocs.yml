@@ -7,6 +7,15 @@ version: 2
 
 sphinx:
   configuration: docs/conf.py
+  fail_on_warning: true
+
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - jwt  # aiohttp_mcp.jwt is autodoc'd in api.rst and imports PyJWT.
+    - requirements: docs/requirements.txt
 
 submodules:
   include: all
