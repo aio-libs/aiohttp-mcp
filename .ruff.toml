@@ -1,0 +1,4 @@
+[lint.per-file-ignores]
+# Doc snippets declare helper callables as annotation-only stubs (checked by
+# mypy) and make illustrative assignments that are never read.
+"docs/code/**" = ["F821", "F841"]
