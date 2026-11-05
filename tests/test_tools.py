@@ -788,7 +788,7 @@ async def test_json_type_strictness(
 async def test_annotated_constraints(make_client: MakeClient) -> None:
     async def resize(
         width: Annotated[int, Field(gt=0)],
-        tags: Annotated[list[str], Field(max_length=2)] = (),
+        tags: Annotated[Sequence[str], Field(max_length=2)] = (),
     ) -> str:
         return f"{width}:{','.join(tags)}"
 
