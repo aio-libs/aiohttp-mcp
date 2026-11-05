@@ -1,7 +1,6 @@
 def minimal_setup() -> None:
-    from aiohttp import web
-
     import aiohttp_mcp
+    from aiohttp import web
 
     async def get_weather(location: str) -> str:
         """Get current weather information for a location."""
@@ -16,9 +15,8 @@ def remote_setup() -> None:
     import os
     import secrets
 
-    from aiohttp import web
-
     import aiohttp_mcp
+    from aiohttp import web
 
     async def check_credentials(username: str, password: str, request: web.Request) -> bool:
         return username == "admin" and secrets.compare_digest(

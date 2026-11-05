@@ -4,9 +4,8 @@ import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-from aiohttp import web
-
 import aiohttp_mcp
+from aiohttp import web
 
 check_credentials: Callable[[str, str, web.Request], Awaitable[bool]]
 introspect: Callable[[str], Mapping[str, Any]]

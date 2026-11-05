@@ -2,10 +2,9 @@ import os
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
 
+import aiohttp_mcp
 from aiohttp import ClientSession, web
 from yarl import URL
-
-import aiohttp_mcp
 
 delete_project: aiohttp_mcp.PromptHandler
 exchange_code: Callable[[str], Awaitable[str]]

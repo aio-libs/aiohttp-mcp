@@ -1,7 +1,7 @@
 """MCP (Model Context Protocol) server support for aiohttp."""
 
 from collections.abc import Callable, Collection
-from typing import Final, Literal, NoReturn
+from typing import Literal
 
 from aiohttp import web
 from yarl import URL

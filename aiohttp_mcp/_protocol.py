@@ -20,10 +20,6 @@ if sys.version_info >= (3, 13):
     from typing import ReadOnly
 else:
     from typing_extensions import ReadOnly
-if sys.version_info >= (3, 12):
-    pass
-else:
-    pass
 
 #: Protocol revisions implemented, newest first.
 PROTOCOL_VERSIONS: Final = ("2026-07-28",)
