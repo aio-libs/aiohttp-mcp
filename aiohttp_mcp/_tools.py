@@ -173,10 +173,12 @@ def _adapter(hint: type[_T], context: str) -> TypeAdapter[_T]:
 
 
 class _ArgumentsParams(TypedDict):
+    # TODO(PY313): ReadOnly: Should fix the type error at the end of _build_spec()
     arguments: NotRequired[Mapping[str, object]]
 
 
 class _ArgumentsBody(TypedDict):
+    # TODO(PY313): ReadOnly
     params: NotRequired[_ArgumentsParams]
 
 
@@ -439,7 +441,7 @@ def _build_spec(tool: Tool) -> _ToolSpec:
         info=info,
         wants_request=wants_request,
         parameters=frozenset(argument_hints),
-        adapter=TypeAdapter(_Body),
+        adapter=TypeAdapter(_Body),  # type: ignore[arg-type]
         required=frozenset(required),
         structured=structured,
         headers=headers,
