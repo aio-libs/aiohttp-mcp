@@ -1,10 +1,12 @@
-import aiohttp_mcp
 from aiohttp import web
+
+import aiohttp_mcp
 
 
 def resources_setup() -> None:
-    import aiohttp_mcp
     from aiohttp import web
+
+    import aiohttp_mcp
 
     async def readme() -> str:
         """Project README.

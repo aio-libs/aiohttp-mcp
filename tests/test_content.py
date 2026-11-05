@@ -4,7 +4,12 @@ from pathlib import Path
 import pytest
 
 from aiohttp_mcp import (
-    AudioContent, EmbeddedResource, Icon, ImageContent, ResourceLink, TextContent
+    AudioContent,
+    EmbeddedResource,
+    Icon,
+    ImageContent,
+    ResourceLink,
+    TextContent,
 )
 
 

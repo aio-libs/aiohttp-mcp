@@ -2,10 +2,10 @@ from contextlib import AbstractAsyncContextManager
 from typing import Annotated, Any
 
 import pytest
+from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 
-from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import (
     Content,
     Doc,

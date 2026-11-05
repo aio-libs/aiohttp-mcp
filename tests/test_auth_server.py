@@ -4,26 +4,26 @@ import asyncio
 import functools
 import hashlib
 import hmac
-import logging
 import html
 import json
+import logging
 import re
 import secrets
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import AsyncIterator, Iterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any, NotRequired, TypedDict, cast
+from typing import NotRequired, TypedDict
 from unittest import mock
 
 import pytest
 from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
 from aiohttp_mcp import ConsentContext, LocalAuthorization, setup
-from aiohttp_mcp._auth_server import _Signer, _b64
+from aiohttp_mcp._auth_server import _b64, _Signer
 
 RESOURCE_BASE = "https://mcp.server.test"
 RESOURCE = "https://mcp.server.test/mcp"

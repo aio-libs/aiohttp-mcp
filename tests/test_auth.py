@@ -447,12 +447,10 @@ def generator_scoped_app(
         events.append("handler")
         if req.params.get("boom"):
             raise RuntimeError("handler failed")
-        return None
 
     async def stream_pr(req: MCPRequest) -> None:
         assert req.http[CONN_KEY] is not None
         events.append("handler")
-        return None
 
     server._methods["test/write-pr"] = Method(write_pr, scopes=pr_scopes)
     server._methods["test/stream-pr"] = Method(stream_pr, streaming=True, scopes=pr_scopes)

@@ -6,7 +6,6 @@ from typing import Final, Literal, NoReturn
 from aiohttp import web
 from yarl import URL
 
-
 from ._auth import TOKEN_INFO_KEY, Authorization, ScopeMatcher, TokenInfo, TokenValidator
 from ._auth_server import (
     AuthenticateRequest,
@@ -26,8 +25,8 @@ from ._content import (
 )
 from ._elicitation import (
     BooleanSchema,
-    ElicitResult,
     Elicitation,
+    ElicitResult,
     EnumSchema,
     FieldSchema,
     FormElicitation,
@@ -75,7 +74,6 @@ __all__ = (
     "ConsentContext",
     "Content",
     "Doc",
-    "Header",
     "ElicitResult",
     "Elicitation",
     "EmbeddedResource",
@@ -83,6 +81,7 @@ __all__ = (
     "FieldSchema",
     "FormContext",
     "FormElicitation",
+    "Header",
     "Icon",
     "ImageContent",
     "InputRequired",

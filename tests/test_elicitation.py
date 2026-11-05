@@ -31,7 +31,6 @@ from aiohttp_mcp import (
 )
 from aiohttp_mcp._transport import Method
 
-
 FORM_CAPS: dict[str, object] = {"elicitation": {"form": {}}}
 ALL_CAPS: dict[str, object] = {"elicitation": {"form": {}, "url": {}}}
 

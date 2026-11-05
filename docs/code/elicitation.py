@@ -144,7 +144,8 @@ def same_site_endpoint(app: web.Application, authorization: aiohttp_mcp.Authoriz
 
 
 def external_as_login(app: web.Application, authorization: aiohttp_mcp.Authorization) -> None:
-    from aiohttp_session import get_session, new_session, setup as session_setup
+    from aiohttp_session import get_session, new_session
+    from aiohttp_session import setup as session_setup
     from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
     AUTH_URL = URL("https://auth.example/authorize")

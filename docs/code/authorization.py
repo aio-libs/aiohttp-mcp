@@ -8,7 +8,6 @@ from aiohttp import web
 
 import aiohttp_mcp
 
-
 check_credentials: Callable[[str, str, web.Request], Awaitable[bool]]
 introspect: Callable[[str], Mapping[str, Any]]
 

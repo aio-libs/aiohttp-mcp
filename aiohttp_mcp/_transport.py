@@ -15,7 +15,7 @@ from collections.abc import (
 )
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
+from typing import TYPE_CHECKING, TypeAlias, cast
 
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
@@ -38,24 +38,19 @@ from ._protocol import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
     INVALID_REQUEST,
-    METHOD_HDR,
-    METHOD_NOT_FOUND,
-    META_CLIENT_CAPABILITIES,
-    META_CLIENT_INFO,
     META_PROTOCOL_VERSION,
     META_SERVER_INFO,
+    METHOD_HDR,
+    METHOD_NOT_FOUND,
     NAME_HDR,
     NAME_HDR_METHODS,
     PARSE_ERROR,
     PROTOCOL_VERSION_HDR,
     PROTOCOL_VERSIONS,
     UNSUPPORTED_PROTOCOL_VERSION,
-    ClientCapabilities,
-    Implementation,
     InputResult,
     JSONRPCErrorResponse,
     JSONRPCNotification,
-    JSONRPCRequest,
     JSONRPCResultResponse,
     MCPError,
     RequestId,

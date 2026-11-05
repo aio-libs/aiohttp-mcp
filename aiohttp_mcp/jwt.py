@@ -9,7 +9,6 @@ from typing import Final
 
 import jwt
 from aiohttp import ClientSession, ClientTimeout, web
-
 from yarl import URL
 
 from ._auth import Authorization, ScopeMatcher, TokenInfo, _secure_url

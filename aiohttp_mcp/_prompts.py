@@ -21,7 +21,6 @@ from ._protocol import (
     PromptInfo,
     PromptMessage,
     Role,
-    ServerCapabilities,
 )
 from ._transport import MCPRequest
 

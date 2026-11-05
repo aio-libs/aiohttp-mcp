@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 from contextlib import AbstractAsyncContextManager
-from typing import Any, cast
+from typing import Any
 
 import jwt
 import pytest

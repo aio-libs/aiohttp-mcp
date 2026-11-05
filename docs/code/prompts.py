@@ -1,10 +1,18 @@
-from aiohttp_mcp import Content, EmbeddedResource, Message, Prompt, PromptRegistry, TextContent
+from aiohttp_mcp import (
+    Content,
+    EmbeddedResource,
+    Message,
+    Prompt,
+    PromptRegistry,
+    TextContent,
+)
 
 
 def prompts_setup() -> None:
     from typing import Annotated
 
     from aiohttp import web
+
     from aiohttp_mcp import Doc, PromptRegistry, setup
 
     async def code_review(

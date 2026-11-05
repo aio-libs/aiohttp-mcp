@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import TYPE_CHECKING, Annotated, ClassVar, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Annotated, ClassVar, Final, Literal, TypeVar
 
 from pydantic import Field, TypeAdapter, ValidationError
 from yarl import URL
