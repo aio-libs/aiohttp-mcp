@@ -4,6 +4,7 @@ import asyncio
 import time
 from contextlib import AbstractAsyncContextManager
 from typing import Any
+from unittest import mock
 
 import pytest
 from aiohttp import ClientResponse, web
@@ -259,20 +260,23 @@ async def test_introspection_cache_eviction(
     make_client: MakeClient, fake_as: FakeIntrospection
 ) -> None:
     """Expired entries are evicted from the cache as new ones are inserted."""
-    fake_as.grant("short", exp=time.time() + 0.05)  # entry capped at token exp
-    fake_as.grant("long")
-    auth = introspection_auth(fake_as, cache_ttl=60)
-    client = await make_client(authorization=auth)
-    async with mcp_post(client, token="short") as resp:
-        assert resp.status == 200
-    async with mcp_post(client, token="long") as resp:
-        assert resp.status == 200
-    assert set(auth._cache) == {"short", "long"}
+    with mock.patch(
+        "aiohttp_mcp._validators.time.time", autospec=True, spec_set=True, return_value=10
+    ) as mock_time:
+        fake_as.grant("short", exp=time.time() + 5)  # entry capped at token exp
+        fake_as.grant("long")
+        auth = introspection_auth(fake_as, cache_ttl=60)
+        client = await make_client(authorization=auth)
+        async with mcp_post(client, token="short") as resp:
+            assert resp.status == 200
+        async with mcp_post(client, token="long") as resp:
+            assert resp.status == 200
+        assert set(auth._cache) == {"short", "long"}
 
-    await asyncio.sleep(0.05)
-    fake_as.grant("another")
-    async with mcp_post(client, token="another") as resp:
-        assert resp.status == 200
+        mock_time.return_value = 20.0  # "short" is now past its exp; "long" is still live
+        fake_as.grant("another")
+        async with mcp_post(client, token="another") as resp:
+            assert resp.status == 200
     # The insert popped the expired entry; the live one survives.
     assert set(auth._cache) == {"long", "another"}
 
