@@ -1,0 +1,2 @@
+# Documentation build requirements (used by .readthedocs.yml).
+sphinx==9.1.0
