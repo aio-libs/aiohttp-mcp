@@ -2,6 +2,10 @@
 
 from typing import Any
 
+from aiohttp import ClientResponse, web
+from pytest_aiohttp import AiohttpClient
+
+import aiohttp_mcp
 from _helpers import (
     META_CAPABILITIES,
     META_SERVER_INFO,
@@ -11,10 +15,6 @@ from _helpers import (
     request_body,
     request_headers,
 )
-from aiohttp import ClientResponse, web
-from pytest_aiohttp import AiohttpClient
-
-import aiohttp_mcp
 
 
 async def assert_error(resp: ClientResponse, status: int, code: int) -> dict[str, Any]:

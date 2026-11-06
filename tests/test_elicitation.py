@@ -5,11 +5,11 @@ from typing import Any
 from unittest import mock
 
 import pytest
-from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 
+from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import (
     Authorization,
     BooleanSchema,
@@ -30,7 +30,6 @@ from aiohttp_mcp import (
     setup,
 )
 from aiohttp_mcp._transport import Method
-
 
 FORM_CAPS: dict[str, object] = {"elicitation": {"form": {}}}
 ALL_CAPS: dict[str, object] = {"elicitation": {"form": {}, "url": {}}}

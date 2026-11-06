@@ -8,16 +8,15 @@ import re
 import sys
 import time
 import types
-from types import EllipsisType
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import EllipsisType
 from typing import (
     Annotated,
     Any,
     Generic,
     Literal,
     NotRequired,
-    TypedDict,
     TypeVar,
     Union,
     get_args,
@@ -28,13 +27,8 @@ from typing import (
 from pydantic import PydanticSchemaGenerationError, TypeAdapter, ValidationError
 from pydantic.json_schema import GenerateJsonSchema
 
-if sys.version_info >= (3, 12):
-    from typing import TypeAliasType
-else:
-    from typing_extensions import TypeAliasType
-
 from ._content import Content, Icon
-from ._handlers import _Parameter, _apply_details, _derive_name, _inspect_handler
+from ._handlers import _apply_details, _derive_name, _inspect_handler, _Parameter
 from ._protocol import (
     HEADER_MISMATCH,
     INTERNAL_ERROR,
@@ -48,6 +42,11 @@ from ._protocol import (
     decode_header_value,
 )
 from ._transport import MCPRequest, logger
+
+if sys.version_info >= (3, 12):
+    from typing import TypeAliasType, TypedDict
+else:
+    from typing_extensions import TypeAliasType, TypedDict
 
 _T = TypeVar("_T")
 # TODO(PY312): use the `type` statement.
@@ -174,10 +173,12 @@ def _adapter(hint: type[_T], context: str) -> TypeAdapter[_T]:
 
 
 class _ArgumentsParams(TypedDict):
+    # TODO(PY313): ReadOnly: Should fix the type error at the end of _build_spec()
     arguments: NotRequired[Mapping[str, object]]
 
 
 class _ArgumentsBody(TypedDict):
+    # TODO(PY313): ReadOnly
     params: NotRequired[_ArgumentsParams]
 
 
@@ -203,33 +204,6 @@ def _format_loc(loc: tuple[int | str, ...]) -> str:
         loc = loc[2:]
     head, *rest = loc
     return str(head) + "".join(f"[{p}]" if isinstance(p, int) else f".{p}" for p in rest)
-
-
-def _convert_arguments(
-    spec: _ToolSpec, ctx: MCPRequest, arguments: Mapping[str, object]
-) -> dict[str, object]:
-    """Validate the call's arguments, returning their converted forms.
-
-    The adapter wraps the ``params.arguments`` path of the request body, so
-    validation reads the raw JSON directly: values must already have the
-    schema's JSON type (no ``"5"`` -> 5 or ``5.0`` -> 5 coercion, and
-    booleans are never numbers), while conversions that exist only *because*
-    the wire format is JSON remain available - ``int`` is accepted for a
-    number, and string-encoded types such as ``datetime`` parse from their
-    JSON representation.
-    """
-    try:
-        params = spec.adapter.validate_json(ctx._body, strict=True)
-    except ValidationError as exc:
-        problems = [
-            f"{_format_loc(e['loc'])}: {e['msg']}" for e in exc.errors(include_url=False)
-        ]
-        raise ValueError("; ".join(problems)) from None
-    converted = dict(params.get("params", {}).get("arguments", {}))
-    for key, value in arguments.items():
-        if key in converted:
-            _reject_narrowing(value, converted[key], key, "")
-    return converted
 
 
 def _reject_narrowing(original: object, validated: object, context: str, path: str) -> None:
@@ -323,6 +297,33 @@ class _ToolSpec:
     # Parameter name to ``Mcp-Param-*`` header name (``x-mcp-header``).
     headers: Mapping[str, str]
     scopes: frozenset[str]
+
+
+def _convert_arguments(
+    spec: _ToolSpec, ctx: MCPRequest, arguments: Mapping[str, object]
+) -> dict[str, object]:
+    """Validate the call's arguments, returning their converted forms.
+
+    The adapter wraps the ``params.arguments`` path of the request body, so
+    validation reads the raw JSON directly: values must already have the
+    schema's JSON type (no ``"5"`` -> 5 or ``5.0`` -> 5 coercion, and
+    booleans are never numbers), while conversions that exist only *because*
+    the wire format is JSON remain available - ``int`` is accepted for a
+    number, and string-encoded types such as ``datetime`` parse from their
+    JSON representation.
+    """
+    try:
+        params = spec.adapter.validate_json(ctx._body, strict=True)
+    except ValidationError as exc:
+        problems = [
+            f"{_format_loc(e['loc'])}: {e['msg']}" for e in exc.errors(include_url=False)
+        ]
+        raise ValueError("; ".join(problems)) from None
+    converted = dict(params.get("params", {}).get("arguments", {}))
+    for key, value in arguments.items():
+        if key in converted:
+            _reject_narrowing(value, converted[key], key, "")
+    return converted
 
 
 def _is_content_hint(hint: object) -> bool:
@@ -440,7 +441,7 @@ def _build_spec(tool: Tool) -> _ToolSpec:
         info=info,
         wants_request=wants_request,
         parameters=frozenset(argument_hints),
-        adapter=TypeAdapter(_Body),
+        adapter=TypeAdapter(_Body),  # type: ignore[arg-type]
         required=frozenset(required),
         structured=structured,
         headers=headers,

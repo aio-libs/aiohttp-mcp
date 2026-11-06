@@ -1,4 +1,11 @@
-from aiohttp_mcp import Content, EmbeddedResource, Message, Prompt, PromptRegistry, TextContent
+from aiohttp_mcp import (
+    Content,
+    EmbeddedResource,
+    Message,
+    Prompt,
+    PromptRegistry,
+    TextContent,
+)
 
 
 def prompts_setup() -> None:

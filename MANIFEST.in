@@ -1,0 +1,13 @@
+include CHANGES.rst
+include LICENSE
+include README.rst
+include requirements*.txt
+include pytest.ini
+include .coveragerc.toml
+include .mypy.ini
+include .ruff.toml
+graft aiohttp_mcp
+graft docs
+graft tests
+global-exclude *.pyc
+prune docs/_build

@@ -2,6 +2,10 @@
 
 import asyncio
 
+from aiohttp import web
+from pytest_aiohttp import AiohttpClient
+
+import aiohttp_mcp
 from _helpers import (
     META_SERVER_INFO,
     META_SUBSCRIPTION_ID,
@@ -11,10 +15,6 @@ from _helpers import (
     request_body,
     request_headers,
 )
-from aiohttp import web
-from pytest_aiohttp import AiohttpClient
-
-import aiohttp_mcp
 from aiohttp_mcp._protocol import InputResult, JSONRPCNotification
 from aiohttp_mcp._transport import MCPRequest, Method
 

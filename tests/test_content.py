@@ -4,7 +4,12 @@ from pathlib import Path
 import pytest
 
 from aiohttp_mcp import (
-    AudioContent, EmbeddedResource, Icon, ImageContent, ResourceLink, TextContent
+    AudioContent,
+    EmbeddedResource,
+    Icon,
+    ImageContent,
+    ResourceLink,
+    TextContent,
 )
 
 
@@ -42,21 +47,25 @@ def test_audio() -> None:
 
 
 @pytest.mark.parametrize(
-    ("cls", "suffix", "mime_type"),
+    ("cls", "suffix", "mime_types"),
     (
-        (ImageContent, "jpeg", "image/jpeg"),
-        (ImageContent, "png", "image/png"),
-        (AudioContent, "wav", "audio/x-wav"),
+        (ImageContent, "jpeg", {"image/jpeg"}),
+        (ImageContent, "png", {"image/png"}),
+        # Windows: wav, Other OSes: x-wav
+        (AudioContent, "wav", {"audio/x-wav", "audio/wav"}),
     ),
 )
 def test_from_file(
-    tmp_path: Path, cls: type[ImageContent | AudioContent], suffix: str, mime_type: str
+    tmp_path: Path,
+    cls: type[ImageContent | AudioContent],
+    suffix: str,
+    mime_types: set[str],
 ) -> None:
     file = tmp_path / f"foo.{suffix}"
     file.write_bytes(b"\xffdata")
     content = cls.from_file(file)
     assert content.data == b"\xffdata"
-    assert content.mime_type == mime_type
+    assert content.mime_type in mime_types
 
 
 def test_from_file_accepts_str_path(tmp_path: Path) -> None:

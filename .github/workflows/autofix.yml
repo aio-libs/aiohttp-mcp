@@ -1,0 +1,28 @@
+name: autofix.ci
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read  # For checkout
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+    - name: Setup Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: '**/requirements*.txt'
+    - name: Install dependencies
+      run: python -m pip install -r requirements-autofix.txt
+    - name: Ruff fix
+      run: ruff check --fix-only --unsafe-fixes
+    - name: autofix.ci
+      uses: autofix-ci/action@v1

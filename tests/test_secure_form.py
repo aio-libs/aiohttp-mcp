@@ -9,7 +9,6 @@ from typing import Any
 from unittest import mock
 
 import pytest
-from _helpers import MakeClient, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from multidict import MultiDict
@@ -17,6 +16,7 @@ from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
 import aiohttp_mcp
+from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import (
     AuthenticateRequest,
     Authorization,
@@ -258,7 +258,9 @@ async def test_retry_wait_times_out(
     start = loop.time()
     async with get_prompt(client, input_responses=ACCEPT, request_state=state) as resp:
         result = await result_of(resp)
-    assert loop.time() - start >= 0.05
+    # asyncio timers may fire up to one clock tick early (BaseEventLoop._run_once);
+    # Windows' monotonic tick is ~16ms, so allow that much slack below _FORM_WAIT.
+    assert loop.time() - start >= 0.05 - 0.016
     assert result["resultType"] == "input_required"
     assert "inputRequests" not in result
 

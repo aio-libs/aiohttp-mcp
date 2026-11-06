@@ -2,16 +2,16 @@ import secrets
 import time
 from typing import Annotated, TypedDict
 
-from aiohttp import web
-
 import aiohttp_mcp
+from aiohttp import web
 
 
 def tools_setup() -> None:
     from typing import Annotated, Literal, NotRequired, TypedDict
 
     from aiohttp import web
-    from aiohttp_mcp import Doc, ToolRegistry, setup as mcp_setup
+    from aiohttp_mcp import Doc, ToolRegistry
+    from aiohttp_mcp import setup as mcp_setup
 
     class Forecast(TypedDict):
         temperature: float

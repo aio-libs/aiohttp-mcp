@@ -13,9 +13,9 @@ import secrets
 import socket
 import sys
 import time
-from ipaddress import ip_address
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from ipaddress import ip_address
 from typing import Final, NoReturn, TypedDict
 
 if sys.version_info >= (3, 12):
@@ -26,7 +26,14 @@ else:
 from aiohttp import ClientError, ClientSession, ClientTimeout, web
 from yarl import URL
 
-from ._auth import Authorization, ScopeMatcher, TokenInfo, _LOOPBACK, _SCOPE_TOKEN, _secure_url
+from ._auth import (
+    _LOOPBACK,
+    _SCOPE_TOKEN,
+    Authorization,
+    ScopeMatcher,
+    TokenInfo,
+    _secure_url,
+)
 
 logger = logging.getLogger("aiohttp_mcp")
 

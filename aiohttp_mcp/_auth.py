@@ -285,8 +285,7 @@ class Authorization:
             self._fail(
                 401, "invalid_token", "Invalid or expired access token", scopes=scopes
             )
-        if scopes:
-            # https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#runtime-insufficient-scope-errors
-            if not all(self._scope_matcher(s, info.scopes) for s in scopes):
-                self._fail(403, "insufficient_scope", "Insufficient scope", scopes=scopes)
+        # https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#runtime-insufficient-scope-errors
+        if scopes and not all(self._scope_matcher(s, info.scopes) for s in scopes):
+            self._fail(403, "insufficient_scope", "Insufficient scope", scopes=scopes)
         return info

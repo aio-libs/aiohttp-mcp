@@ -7,12 +7,12 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 
 import pytest
-from _helpers import MakeClient, next_sse_data, request_body, request_headers
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 from multidict import CIMultiDict, MultiDict
 from pytest_aiohttp import AiohttpClient
 
+from _helpers import MakeClient, next_sse_data, request_body, request_headers
 from aiohttp_mcp import (
     Authorization,
     Prompt,
@@ -447,12 +447,10 @@ def generator_scoped_app(
         events.append("handler")
         if req.params.get("boom"):
             raise RuntimeError("handler failed")
-        return None
 
     async def stream_pr(req: MCPRequest) -> None:
         assert req.http[CONN_KEY] is not None
         events.append("handler")
-        return None
 
     server._methods["test/write-pr"] = Method(write_pr, scopes=pr_scopes)
     server._methods["test/stream-pr"] = Method(stream_pr, streaming=True, scopes=pr_scopes)

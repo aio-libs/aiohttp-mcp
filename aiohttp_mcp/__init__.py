@@ -1,11 +1,10 @@
 """MCP (Model Context Protocol) server support for aiohttp."""
 
 from collections.abc import Callable, Collection
-from typing import Final, Literal, NoReturn
+from typing import Literal
 
 from aiohttp import web
 from yarl import URL
-
 
 from ._auth import TOKEN_INFO_KEY, Authorization, ScopeMatcher, TokenInfo, TokenValidator
 from ._auth_server import (
@@ -26,8 +25,8 @@ from ._content import (
 )
 from ._elicitation import (
     BooleanSchema,
-    ElicitResult,
     Elicitation,
+    ElicitResult,
     EnumSchema,
     FieldSchema,
     FormElicitation,
@@ -75,7 +74,6 @@ __all__ = (
     "ConsentContext",
     "Content",
     "Doc",
-    "Header",
     "ElicitResult",
     "Elicitation",
     "EmbeddedResource",
@@ -83,6 +81,7 @@ __all__ = (
     "FieldSchema",
     "FormContext",
     "FormElicitation",
+    "Header",
     "Icon",
     "ImageContent",
     "InputRequired",

@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import TYPE_CHECKING, Annotated, ClassVar, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Annotated, ClassVar, Final, Literal, TypeVar
 
 from pydantic import Field, TypeAdapter, ValidationError
 from yarl import URL
@@ -463,15 +463,15 @@ def _parse_result(key: str, response: object, elicitation: Elicitation) -> Elici
     if not isinstance(content, Mapping):
         raise MCPError(INVALID_PARAMS, f"Missing content for elicitation {key!r}")
     validated: dict[str, object] = {}
-    for name, field in elicitation.fields.items():
+    for name, spec in elicitation.fields.items():
         if name not in content:
-            if field.required:
+            if spec.required:
                 raise MCPError(
                     INVALID_PARAMS, f"Missing field {name!r} in elicitation {key!r}"
                 )
             continue
         try:
-            validated[name] = field._validate(content[name])
+            validated[name] = spec._validate(content[name])
         except ValueError as exc:
             raise MCPError(
                 INVALID_PARAMS,
