@@ -1093,12 +1093,17 @@ async def test_cimd_redirects_not_followed(
 class _StubResolver:
     """Stands in for ``DefaultResolver``, answering with canned addresses."""
 
-    def __init__(self, *addresses: str) -> None:
+    def __init__(self, *addresses: str, port: int | None = None) -> None:
         self._addresses = addresses
+        self._port = port
+        self.requests: list[str] = []
 
     async def resolve(
         self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
     ) -> list[ResolveResult]:
+        self.requests.append(host)
+        if self._port is not None:
+            port = self._port
         return [
             ResolveResult(
                 hostname=host, host=a, port=port, family=socket.AF_INET, proto=0, flags=0
@@ -1147,19 +1152,38 @@ async def test_cimd_dns_rebinding_rejected(make_client: MakeClient) -> None:
     A rebinding DNS server passes any up-front hostname check and then points
     the fetch into the private network; the connect-time policy must catch it.
     """
-    with mock.patch(
-        "aiohttp_mcp._auth_server.DefaultResolver",
-        return_value=_StubResolver("127.0.0.1"),
-    ):
-        client = await make_client(authorization=make_auth())
-        _, challenge = pkce()
-        async with client.get(
-            "/oauth2/authorize",
-            params=authz_query(challenge, client_id="https://rebind.test/client.json"),
-            allow_redirects=False,
-        ) as resp:
-            assert resp.status == 400
-            assert "Failed to fetch client metadata" in await resp.text()
+    # Canary: a loopback listener the rebound answer points at.  The policy
+    # must reject the resolution before any connection is attempted.
+    connections: list[asyncio.StreamWriter] = []
+
+    async def on_connect(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        connections.append(writer)
+        writer.close()
+
+    canary = await asyncio.start_server(on_connect, host="127.0.0.1")
+    port = canary.sockets[0].getsockname()[1]
+    stub = _StubResolver("127.0.0.1", port=port)
+    try:
+        with mock.patch(
+            "aiohttp_mcp._auth_server.DefaultResolver", return_value=stub
+        ):
+            client = await make_client(authorization=make_auth())
+            _, challenge = pkce()
+            async with client.get(
+                "/oauth2/authorize",
+                params=authz_query(challenge, client_id="https://rebind.test/client.json"),
+                allow_redirects=False,
+            ) as resp:
+                assert resp.status == 400
+                assert "Failed to fetch client metadata" in await resp.text()
+    finally:
+        canary.close()
+        await canary.wait_closed()
+
+    # The rejection must come from the policy resolver, not from a DNS failure
+    # or a refused connection: the stub was consulted and nothing was dialed.
+    assert stub.requests == ["rebind.test"]
+    assert not connections
 
 
 @pytest.mark.parametrize(
