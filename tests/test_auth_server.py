@@ -279,10 +279,38 @@ async def test_login_wrong_password_reprompts(make_client: MakeClient) -> None:
 
 async def test_login_open_redirect_blocked(make_client: MakeClient) -> None:
     client = await make_client(authorization=make_auth())
-    for target in ("https://evil.example/", "//evil.example/x", "/other/path"):
+    for target in (
+        "https://evil.example/",
+        "//evil.example/x",
+        "/other/path",
+        # Scheme smuggling: browsers normalise "https:/x" to "https://x",
+        # yet yarl parses these as host-less and path-matching.
+        "https:/oauth2/authorize",
+        "https:/oauth2/authorize@evil.example/x",
+        "file:/oauth2/authorize",
+        "javascript:/oauth2/authorize",
+        "/\\evil.example/",
+        "//[",  # malformed: must fall back to "/", not raise
+    ):
         async with login(client, redirect=target) as resp:
             assert resp.status == 303
             assert resp.headers["Location"] == "/"
+
+
+async def test_login_page_open_redirect_blocked_when_authenticated(
+    make_client: MakeClient,
+) -> None:
+    """The already-signed-in shortcut on the login page gets the same guard."""
+    client = await make_client(authorization=make_auth())
+    async with login(client):
+        pass
+    async with client.get(
+        "/oauth2/login",
+        params={"redirect": "https:/oauth2/authorize"},
+        allow_redirects=False,
+    ) as resp:
+        assert resp.status == 303
+        assert resp.headers["Location"] == "/"
 
 
 async def test_login_when_already_authenticated(make_client: MakeClient) -> None:

@@ -281,12 +281,17 @@ class _PageError(Exception):
 
 
 class _RedirectError(Exception):
-    """Reported to the client via redirect (RFC 6749 section 4.1.2.1)."""
+    """Reported to the client via redirect (RFC 6749 section 4.1.2.1).
 
-    def __init__(self, error: str, description: str) -> None:
+    ``redirect_uri`` has passed _redirect_allowed(): it is safe to
+    send the error there.
+    """
+
+    def __init__(self, error: str, description: str, redirect_uri: str) -> None:
         super().__init__(description)
         self.error = error
         self.description = description
+        self.redirect_uri = redirect_uri
 
 
 class _AuthServerMetadata(TypedDict):
@@ -601,19 +606,23 @@ class LocalAuthorization(Authorization):
             raise _PageError("Invalid redirect_uri")
 
         if args.get("response_type") != "code":
-            raise _RedirectError("unsupported_response_type", "Must be response_type=code")
+            raise _RedirectError(
+                "unsupported_response_type", "Must be response_type=code", redirect_uri
+            )
         # PKCE is mandatory (OAuth 2.1); only S256 is offered.
         if not args.get("code_challenge"):
-            raise _RedirectError("invalid_request", "code_challenge is required")
+            raise _RedirectError("invalid_request", "code_challenge is required", redirect_uri)
         if args.get("code_challenge_method") != "S256":
-            raise _RedirectError("invalid_request", "code_challenge_method must be S256")
+            raise _RedirectError(
+                "invalid_request", "code_challenge_method must be S256", redirect_uri
+            )
         resource = args.get("resource")
         if resource and resource != self._resource:
             # RFC 8707: tokens are only issued for this server's resource.
-            raise _RedirectError("invalid_target", "Unknown resource")
+            raise _RedirectError("invalid_target", "Unknown resource", redirect_uri)
         requested = args.get("scope", "").split()
         if not set(requested) <= set(self._grantable_scopes):
-            raise _RedirectError("invalid_scope", "Unknown scope requested")
+            raise _RedirectError("invalid_scope", "Unknown scope requested", redirect_uri)
         params = {field: args.get(field, "") for field in _FORM_FIELDS}
         # Least privilege: an unspecific request grants the default starting
         # set, not everything this server could grant.
@@ -716,7 +725,7 @@ class LocalAuthorization(Authorization):
         if await self._subject(request) is None:
             self._login_redirect(self._return_url(args))
         self._redirect(
-            args["redirect_uri"],
+            exc.redirect_uri,
             args.get("state", ""),
             error=exc.error,
             error_description=exc.description,
@@ -783,9 +792,22 @@ class LocalAuthorization(Authorization):
 
     def _safe_return_url(self, value: str | None) -> str:
         if value is not None:
-            url = URL(value)
-            if not url.is_absolute() and url.path.startswith(self._return_prefixes):
-                return str(url)
+            try:
+                url = URL(value)
+            except ValueError:
+                return "/"
+            if (
+                not url.scheme
+                and not url.is_absolute()
+                and url.path.startswith(self._return_prefixes)
+            ):
+                return str(
+                    URL.build(
+                        path=url.raw_path,
+                        query_string=url.raw_query_string,
+                        encoded=True,
+                    )
+                )
         return "/"
 
     def _render_login_page(self, redirect: str, error: str | None) -> web.Response:
