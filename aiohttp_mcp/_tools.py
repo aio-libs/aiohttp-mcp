@@ -3,6 +3,7 @@
 import heapq
 import inspect
 import json
+import logging
 import math
 import re
 import sys
@@ -41,12 +42,14 @@ from ._protocol import (
     _InputSchema,
     decode_header_value,
 )
-from ._transport import MCPRequest, logger
+from ._transport import MCPRequest
 
 if sys.version_info >= (3, 12):
     from typing import TypeAliasType, TypedDict
 else:
     from typing_extensions import TypeAliasType, TypedDict
+
+logger = logging.getLogger("aiohttp_mcp")
 
 _T = TypeVar("_T")
 # TODO(PY312): use the `type` statement.
