@@ -1,6 +1,5 @@
 """A self-contained OAuth 2.1 authorization server for a single MCP resource."""
 
-import asyncio
 import base64
 import binascii
 import hashlib
@@ -23,7 +22,15 @@ if sys.version_info >= (3, 12):
 else:
     from typing_extensions import TypeAliasType
 
-from aiohttp import ClientError, ClientSession, ClientTimeout, web
+from aiohttp import (
+    ClientError,
+    ClientSession,
+    ClientTimeout,
+    DefaultResolver,
+    TCPConnector,
+    web,
+)
+from aiohttp.abc import AbstractResolver, ResolveResult
 from yarl import URL
 
 from ._auth import (
@@ -105,30 +112,55 @@ def _valid_redirect_uris(uris: Sequence[object]) -> bool:
         return False
 
 
-async def _cimd_url_allowed(url: URL) -> bool:
-    """Fetch policy for Client ID Metadata Documents.
+def _cimd_url_allowed(url: URL) -> bool:
+    """Static fetch policy for Client ID Metadata Documents.
 
     These are server-side fetches of a *client-controlled* URL: https only,
     public hosts only - a private, loopback, or link-local target would turn
     the authorization server into an SSRF proxy for its own network.
+
+    Only the scheme and literal-address hosts are rejected here; hostnames
+    are policed by _PublicHostResolver at connect time, against the
+    actual addresses the connection will use. Checking them here instead would
+    leave a window for DNS rebinding between check and fetch.
     """
     host = url.host
     if url.scheme != "https" or host is None:
         return False
     try:
-        addresses = [ip_address(host)]
-    except ValueError:
+        address = ip_address(host)
+    except ValueError:  # Hostname: resolved addresses checked at connect time.
+        return True
+    return address.is_global
+
+
+class _PublicHostResolver(AbstractResolver):
+    """DNS resolver that refuses to resolve hostnames to non-public addresses.
+
+    Enforcing the policy inside the connector's resolver means the checked
+    addresses are exactly the ones used: a rebinding DNS server cannot
+    answer differently for the policy check and the connection.
+    """
+
+    def __init__(self) -> None:
+        self._resolver = DefaultResolver()
+
+    async def resolve(
+        self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
+    ) -> list[ResolveResult]:
+        infos = await self._resolver.resolve(host, port, family=family)
         try:
-            infos = await asyncio.get_running_loop().getaddrinfo(
-                host, url.port, type=socket.SOCK_STREAM
+            allowed = bool(infos) and all(
+                ip_address(info["host"]).is_global for info in infos
             )
-        except OSError:
-            return False
-        try:
-            addresses = [ip_address(info[4][0]) for info in infos]
         except ValueError:
-            return False
-    return bool(addresses) and all(address.is_global for address in addresses)
+            allowed = False
+        if not allowed:
+            raise OSError(f"{host!r} did not resolve to public addresses")
+        return infos
+
+    async def close(self) -> None:
+        await self._resolver.close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -485,9 +517,12 @@ class LocalAuthorization(Authorization):
         )
 
     async def _client_session(self, app: web.Application) -> AsyncIterator[None]:
-        async with ClientSession(timeout=_CIMD_TIMEOUT) as sess:
+        resolver = _PublicHostResolver()
+        connector = TCPConnector(resolver=resolver, limit=10)
+        async with ClientSession(timeout=_CIMD_TIMEOUT, connector=connector) as sess:
             self._http = sess
             yield
+        await resolver.close()
 
     # - Token validation (the resource-server side) -------------------------
 
@@ -515,7 +550,7 @@ class LocalAuthorization(Authorization):
             return static
         # https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00
         url = URL(client_id)
-        if not await _cimd_url_allowed(url):
+        if not _cimd_url_allowed(url):
             raise _PageError("Unknown client_id")
         cached = self._cimd_cache.get(client_id)
         if cached is not None and cached[0] > time.monotonic():
