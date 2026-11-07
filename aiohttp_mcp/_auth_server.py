@@ -518,11 +518,13 @@ class LocalAuthorization(Authorization):
 
     async def _client_session(self, app: web.Application) -> AsyncIterator[None]:
         resolver = _PublicHostResolver()
-        connector = TCPConnector(resolver=resolver, limit=10)
-        async with ClientSession(timeout=_CIMD_TIMEOUT, connector=connector) as sess:
-            self._http = sess
-            yield
-        await resolver.close()
+        try:
+            connector = TCPConnector(resolver=resolver, limit=10)
+            async with ClientSession(timeout=_CIMD_TIMEOUT, connector=connector) as sess:
+                self._http = sess
+                yield
+        finally:
+            await resolver.close()
 
     # - Token validation (the resource-server side) -------------------------
 
