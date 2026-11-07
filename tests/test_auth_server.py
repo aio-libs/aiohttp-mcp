@@ -1106,7 +1106,8 @@ class _StubResolver:
             for a in self._addresses
         ]
 
-    async def close(self) -> None: ...
+    async def close(self) -> None:
+        """Dummy"""
 
 
 @pytest.mark.parametrize(
