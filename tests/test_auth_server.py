@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import secrets
+import socket
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import AsyncIterator, Iterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -17,13 +18,14 @@ from unittest import mock
 
 import pytest
 from aiohttp import ClientResponse, web
+from aiohttp.abc import ResolveResult
 from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
 from _helpers import MakeClient, request_body, request_headers
 from aiohttp_mcp import ConsentContext, LocalAuthorization, setup
-from aiohttp_mcp._auth_server import _b64, _Signer
+from aiohttp_mcp._auth_server import _b64, _PublicHostResolver, _Signer
 
 RESOURCE_BASE = "https://mcp.server.test"
 RESOURCE = "https://mcp.server.test/mcp"
@@ -1088,19 +1090,50 @@ async def test_cimd_redirects_not_followed(
         assert "client metadata" in await resp.text()
 
 
+class _StubResolver:
+    """Stands in for ``DefaultResolver``, answering with canned addresses."""
+
+    def __init__(self, *addresses: str, port: int | None = None) -> None:
+        self._addresses = addresses
+        self._port = port
+        self.requests: list[str] = []
+
+    async def resolve(
+        self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
+    ) -> list[ResolveResult]:
+        self.requests.append(host)
+        if self._port is not None:
+            port = self._port
+        return [
+            ResolveResult(
+                hostname=host, host=a, port=port, family=socket.AF_INET, proto=0, flags=0
+            )
+            for a in self._addresses
+        ]
+
+    async def close(self) -> None:
+        """Dummy"""
+
+
 @pytest.mark.parametrize(
-    "client_id",
+    ("client_id", "error"),
     (
-        "http://public.example/client.json",  # not https
-        "https://127.0.0.1/client.json",  # loopback
-        "https://[::1]/client.json",  # loopback, v6
-        "https://10.0.0.5/client.json",  # private
-        "https://192.168.1.10/client.json",  # private
-        "https://169.254.1.1/client.json",  # link-local
-        "https://localhost/client.json",  # hostname resolving to loopback
+        # Rejected before any fetch: wrong scheme, or a non-public literal address
+        # (literal addresses are used directly, without consulting the resolver).
+        ("http://public.test/client.json", "Unknown client_id"),  # not https
+        ("https://127.0.0.1/client.json", "Unknown client_id"),  # loopback
+        ("https://[::1]/client.json", "Unknown client_id"),  # loopback, v6
+        ("https://10.0.0.5/client.json", "Unknown client_id"),  # private
+        ("https://192.168.1.10/client.json", "Unknown client_id"),  # private
+        ("https://169.254.1.1/client.json", "Unknown client_id"),  # link-local
+        ("https://[::ffff:10.0.0.5]/client.json", "Unknown client_id"),  # mapped v4
+        # Hostnames are policed at connect time, when they resolve non-public.
+        ("https://localhost/client.json", "Failed to fetch client metadata"),
     ),
 )
-async def test_cimd_private_targets_rejected(make_client: MakeClient, client_id: str) -> None:
+async def test_cimd_private_targets_rejected(
+    make_client: MakeClient, client_id: str, error: str
+) -> None:
     """SSRF guard: client_id documents are only fetched from public hosts."""
     client = await make_client(authorization=make_auth())
     _, challenge = pkce()
@@ -1110,7 +1143,79 @@ async def test_cimd_private_targets_rejected(make_client: MakeClient, client_id:
         allow_redirects=False,
     ) as resp:
         assert resp.status == 400
-        assert "Unknown client_id" in await resp.text()
+        assert error in await resp.text()
+
+
+async def test_cimd_dns_rebinding_rejected(make_client: MakeClient) -> None:
+    """The address policy binds to the addresses actually used.
+
+    A rebinding DNS server passes any up-front hostname check and then points
+    the fetch into the private network; the connect-time policy must catch it.
+    """
+    # Canary: a loopback listener the rebound answer points at.  The policy
+    # must reject the resolution before any connection is attempted.
+    connections: list[asyncio.StreamWriter] = []
+
+    async def on_connect(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        connections.append(writer)
+        writer.close()
+
+    canary = await asyncio.start_server(on_connect, host="127.0.0.1")
+    port = canary.sockets[0].getsockname()[1]
+    stub = _StubResolver("127.0.0.1", port=port)
+    try:
+        with mock.patch(
+            "aiohttp_mcp._auth_server.DefaultResolver", return_value=stub
+        ):
+            client = await make_client(authorization=make_auth())
+            _, challenge = pkce()
+            async with client.get(
+                "/oauth2/authorize",
+                params=authz_query(challenge, client_id="https://rebind.test/client.json"),
+                allow_redirects=False,
+            ) as resp:
+                assert resp.status == 400
+                assert "Failed to fetch client metadata" in await resp.text()
+    finally:
+        canary.close()
+        await canary.wait_closed()
+
+    # The rejection must come from the policy resolver, not from a DNS failure
+    # or a refused connection: the stub was consulted and nothing was dialed.
+    assert stub.requests == ["rebind.test"]
+    assert not connections
+
+
+@pytest.mark.parametrize(
+    "addresses",
+    (
+        ("127.0.0.1",),  # loopback
+        ("10.0.0.5",),  # private
+        ("93.184.216.34", "10.0.0.5"),  # one public, one private: all-or-nothing
+        (),  # no addresses at all
+        ("not-an-ip",),  # garbage from the resolver
+    ),
+)
+async def test_public_host_resolver_rejects(addresses: tuple[str, ...]) -> None:
+    with mock.patch(
+        "aiohttp_mcp._auth_server.DefaultResolver", return_value=_StubResolver(*addresses)
+    ):
+        resolver = _PublicHostResolver()
+    with pytest.raises(OSError):
+        await resolver.resolve("client.example")
+
+
+async def test_public_host_resolver_allows_public() -> None:
+    with mock.patch(
+        "aiohttp_mcp._auth_server.DefaultResolver",
+        return_value=_StubResolver("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"),
+    ):
+        resolver = _PublicHostResolver()
+    infos = await resolver.resolve("client.example")
+    assert [info["host"] for info in infos] == [
+        "93.184.216.34",
+        "2606:2800:220:1:248:1893:25c8:1946",
+    ]
 
 
 async def test_consent_never_skipped(make_client: MakeClient) -> None:
