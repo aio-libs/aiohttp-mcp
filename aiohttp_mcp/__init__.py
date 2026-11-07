@@ -155,7 +155,8 @@ def setup(
     :param description: Optional human-readable description of the server.
     :param website_url: Optional URL of the server's website.
     :param instructions: Optional natural-language guidance for LLMs, returned
-        by ``server/discover``.
+        by ``server/discover``. For most harnesses, these instructions and a list
+        of tool names is likely the only thing the LLM will see at session start.
     :param include_server_info: Include ``serverInfo`` in every result's
         ``_meta`` (recommended by the specification).
     :param discover_ttl: Client-side cache lifetime of the ``server/discover``
