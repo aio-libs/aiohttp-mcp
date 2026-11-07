@@ -262,10 +262,15 @@ class _Signer:
         try:
             payload = json.loads(_unb64(body))
         except (ValueError, binascii.Error):
-            logger.error(f"Correctly signed token carries an unparseable payload: {body!r}")
+            logger.error(
+                "Correctly signed token carries an unparseable payload (%d chars)", len(body)
+            )
             return None
         if not isinstance(payload, dict):
-            logger.error(f"Correctly signed token carries a non-object payload: {payload!r}")
+            logger.error(
+                "Correctly signed token carries a non-object payload of type %s",
+                type(payload).__name__,
+            )
             return None
         return payload
 
