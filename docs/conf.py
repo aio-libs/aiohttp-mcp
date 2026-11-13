@@ -14,13 +14,13 @@ _PYPROJECT = _REPO_ROOT / "pyproject.toml"
 release = tomllib.loads(_PYPROJECT.read_text("utf-8"))["project"]["version"]
 version = ".".join(release.split(".")[:2])
 
-project = "aiohttp-mcp"
+project = "aiohttp-mcp-server"
 copyright = "2026, aio-libs contributors"
 author = "aio-libs contributors"
 
 github_url = "https://github.com"
 github_repo_org = "aio-libs"
-github_repo_name = "aiohttp-mcp"
+github_repo_name = "aiohttp-mcp-server"
 github_repo_slug = f"{github_repo_org}/{github_repo_name}"
 github_repo_url = f"{github_url}/{github_repo_slug}"
 
@@ -53,7 +53,7 @@ highlight_language = "python3"
 
 # The API reference is generated from docstrings, with type annotations rendered
 # in the signatures. Every annotation becomes a cross-reference resolved under
-# ``nitpicky``; aiohttp-mcp types are documented in api.rst, external ones via
+# ``nitpicky``; aiohttp-mcp-server types are documented in api.rst, external ones via
 # intersphinx or ``nitpick_ignore``.
 autodoc_member_order = "bysource"
 autodoc_typehints = "signature"
@@ -106,16 +106,16 @@ spelling_ignore_wiki_words = True
 nitpicky = True
 # https://github.com/sphinx-doc/sphinx/issues/14462
 nitpick_ignore = [
-    ("py:class", "aiohttp_mcp._tools._T"),
-    ("py:obj", "aiohttp_mcp._tools._T"),
+    ("py:class", "aiohttp_mcp_server._tools._T"),
+    ("py:obj", "aiohttp_mcp_server._tools._T"),
 ]
 
 def _resolve_type_alias(app, env, node, contnode):
     # TODO: Drop this function when fixed: https://github.com/sphinx-doc/sphinx/issues/14745
     module, _, name = node["reftarget"].rpartition(".")
-    if not module.startswith("aiohttp_mcp._"):
+    if not module.startswith("aiohttp_mcp_server._"):
         return None
-    node["reftarget"] = target = f"aiohttp_mcp.{name}"
+    node["reftarget"] = target = f"aiohttp_mcp_server.{name}"
     return env.domains["py"].resolve_xref(
         env, node.get("refdoc"), app.builder, "obj", target, node, contnode
     )

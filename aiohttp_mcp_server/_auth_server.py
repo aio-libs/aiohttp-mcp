@@ -42,7 +42,7 @@ from ._auth import (
     _secure_url,
 )
 
-logger = logging.getLogger("aiohttp_mcp")
+logger = logging.getLogger("aiohttp_mcp_server")
 
 # TODO(PY312): use the `type` statement.
 AuthenticateRequest = TypeAliasType(
@@ -56,7 +56,7 @@ _CIMD_TIMEOUT: Final = ClientTimeout(total=10)
 _CIMD_MAX_SIZE: Final = 64 * 1024
 _CIMD_CACHE_TTL: Final = 300.0
 _CIMD_CACHE_MAX: Final = 16
-_SESSION_COOKIE: Final = "aiohttp_mcp_session"
+_SESSION_COOKIE: Final = "aiohttp_mcp_server_session"
 # Our endpoints all live under this prefix; the session cookie is scoped to it.
 _OAUTH_PATH: Final = "/oauth2"
 _CONSENT_TTL: Final = 600.0
@@ -348,11 +348,11 @@ class LocalAuthorization(Authorization):
         :class:`Authorization`. It is also the authorization
         server's issuer identity, and the :brand:`OAuth` endpoints live under
         ``/oauth2/`` beneath it: they are registered on this application by
-        :func:`~aiohttp_mcp.setup`; register the well-known documents via
+        :func:`~aiohttp_mcp_server.setup`; register the well-known documents via
         :meth:`register_well_known` on the root application.
     :param secret: Key signing tokens and authorization codes. Random when
         omitted, which invalidates tokens on restart. Can be the same secret
-        passed as ``state_secret`` to :func:`~aiohttp_mcp.setup`.
+        passed as ``state_secret`` to :func:`~aiohttp_mcp_server.setup`.
     :param clients: Statically registered clients, mapping ``client_id`` to
         its exact ``redirect_uris``. Clients using Client ID Metadata
         Documents (an ``https`` ``client_id`` URL) need no registration.

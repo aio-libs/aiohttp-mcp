@@ -5,19 +5,19 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from _helpers import MakeClient
 
 
 @pytest.fixture
-def mcp_servers() -> list[aiohttp_mcp.MCPServer]:
+def mcp_servers() -> list[mcp.MCPServer]:
     """The servers created by ``make_client``, in creation order."""
     return []
 
 
 @pytest.fixture
 def make_client(
-    aiohttp_client: AiohttpClient, mcp_servers: list[aiohttp_mcp.MCPServer]
+    aiohttp_client: AiohttpClient, mcp_servers: list[mcp.MCPServer]
 ) -> MakeClient:
     """Create a ``TestClient`` for an app with one MCP endpoint on it."""
 
@@ -25,7 +25,7 @@ def make_client(
         kwargs.setdefault("name", "test-server")
         kwargs.setdefault("version", "1.2.3")
         app = web.Application()
-        mcp_servers.append(aiohttp_mcp.setup(app, **kwargs))
+        mcp_servers.append(mcp.setup(app, **kwargs))
         return await aiohttp_client(app)
 
     return maker

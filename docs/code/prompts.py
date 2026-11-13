@@ -1,4 +1,4 @@
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     Content,
     EmbeddedResource,
     Message,
@@ -12,7 +12,7 @@ def prompts_setup() -> None:
     from typing import Annotated
 
     from aiohttp import web
-    from aiohttp_mcp import Doc, PromptRegistry, setup
+    from aiohttp_mcp_server import Doc, PromptRegistry, setup
 
     async def code_review(
         code: Annotated[str, Doc("The code to review")],
@@ -32,7 +32,7 @@ def prompts_setup() -> None:
 def multi_modal() -> None:
     from pathlib import Path
 
-    from aiohttp_mcp import Content, ImageContent, TextContent
+    from aiohttp_mcp_server import Content, ImageContent, TextContent
 
     async def describe_logo() -> tuple[Content, ...]:
         """Ask for a description of the project logo."""

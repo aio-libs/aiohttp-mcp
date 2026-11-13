@@ -6,7 +6,7 @@ include pytest.ini
 include .coveragerc.toml
 include .mypy.ini
 include .ruff.toml
-graft aiohttp_mcp
+graft aiohttp_mcp_server
 graft docs
 graft tests
 global-exclude *.pyc

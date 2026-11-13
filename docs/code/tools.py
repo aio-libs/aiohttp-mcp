@@ -2,7 +2,7 @@ import secrets
 import time
 from typing import Annotated, TypedDict
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from aiohttp import web
 
 
@@ -10,8 +10,8 @@ def tools_setup() -> None:
     from typing import Annotated, Literal, NotRequired, TypedDict
 
     from aiohttp import web
-    from aiohttp_mcp import Doc, ToolRegistry
-    from aiohttp_mcp import setup as mcp_setup
+    from aiohttp_mcp_server import Doc, ToolRegistry
+    from aiohttp_mcp_server import setup as mcp_setup
 
     class Forecast(TypedDict):
         temperature: float
@@ -37,7 +37,7 @@ async def book_flight(date: str) -> str:
     """Book a flight on the given date."""
     if date < "2026-11-01":
         # Actionable feedback the model can self-correct with.
-        raise aiohttp_mcp.ToolError("Invalid departure date: must be in the future.")
+        raise mcp.ToolError("Invalid departure date: must be in the future.")
     return f"Booked a flight on {date}."
 
 
@@ -46,7 +46,7 @@ def tool_hints() -> None:
         """Delete a search index."""
         return f"Deleted {name}."
 
-    tool = aiohttp_mcp.Tool(
+    tool = mcp.Tool(
         delete_index,
         destructive=True,
         idempotent=True,
@@ -54,7 +54,7 @@ def tool_hints() -> None:
     )
 
     app = web.Application()
-    aiohttp_mcp.setup(app, tools=aiohttp_mcp.ToolRegistry(tool))
+    mcp.setup(app, tools=mcp.ToolRegistry(tool))
     web.run_app(app, handler_cancellation=True)
 
 
@@ -64,7 +64,7 @@ def stateful_tools() -> None:
 
     baskets = web.AppKey("baskets", dict[str, tuple[float, list[str]]])
 
-    async def create_basket(request: aiohttp_mcp.MCPRequest) -> BasketHandle:
+    async def create_basket(request: mcp.MCPRequest) -> BasketHandle:
         """Create a shopping basket.
 
         Baskets are valid for 300 seconds after creation.
@@ -74,11 +74,11 @@ def stateful_tools() -> None:
         request.http.app[baskets][basket_id] = (expiry, [])
         return {"basket_id": basket_id}
 
-    async def add_item(request: aiohttp_mcp.MCPRequest, basket_id: str, sku: str) -> str:
+    async def add_item(request: mcp.MCPRequest, basket_id: str, sku: str) -> str:
         """Add an item to a basket previously created with create_basket."""
         expiry, items = request.http.app[baskets].get(basket_id, (0, []))
         if expiry <= time.monotonic():
-            raise aiohttp_mcp.ToolError(
+            raise mcp.ToolError(
                 f"Unknown or expired basket {basket_id!r}; create a new one"
                 " with create_basket."
             )
@@ -87,12 +87,12 @@ def stateful_tools() -> None:
 
     app = web.Application()
     app[baskets] = {}
-    aiohttp_mcp.setup(app, tools=aiohttp_mcp.ToolRegistry(create_basket, add_item))
+    mcp.setup(app, tools=mcp.ToolRegistry(create_basket, add_item))
     web.run_app(app, handler_cancellation=True)
 
 
 def param_headers() -> None:
-    from aiohttp_mcp import Doc, Header
+    from aiohttp_mcp_server import Doc, Header
 
     async def execute_sql(
         region: Annotated[str, Doc("The region to execute in"), Header("Region")],

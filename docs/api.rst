@@ -2,12 +2,12 @@
 API Reference
 =============
 
-.. module:: aiohttp_mcp
+.. module:: aiohttp_mcp_server
 
 Setup
 =====
 
-.. autofunction:: aiohttp_mcp.setup
+.. autofunction:: aiohttp_mcp_server.setup
 
 .. autoclass:: MCPServer()
 
@@ -17,17 +17,17 @@ Setup
 Tools
 =====
 
-.. autoclass:: aiohttp_mcp.ToolRegistry
+.. autoclass:: aiohttp_mcp_server.ToolRegistry
 
-.. autoclass:: aiohttp_mcp.Tool
+.. autoclass:: aiohttp_mcp_server.Tool
 
-.. autoclass:: aiohttp_mcp.ToolResult
+.. autoclass:: aiohttp_mcp_server.ToolResult
 
-.. autoclass:: aiohttp_mcp.RateLimiter
+.. autoclass:: aiohttp_mcp_server.RateLimiter
 
-.. autoclass:: aiohttp_mcp.ToolError
+.. autoclass:: aiohttp_mcp_server.ToolError
 
-.. autoclass:: aiohttp_mcp.Header
+.. autoclass:: aiohttp_mcp_server.Header
 
 .. autotype:: ToolHandler
 
@@ -38,13 +38,13 @@ Tools
 Prompts
 =======
 
-.. autoclass:: aiohttp_mcp.PromptRegistry
+.. autoclass:: aiohttp_mcp_server.PromptRegistry
 
-.. autoclass:: aiohttp_mcp.Prompt
+.. autoclass:: aiohttp_mcp_server.Prompt
 
-.. autoclass:: aiohttp_mcp.Message
+.. autoclass:: aiohttp_mcp_server.Message
 
-.. autoclass:: aiohttp_mcp.Doc
+.. autoclass:: aiohttp_mcp_server.Doc
 
 .. autotype:: PromptHandler
 
@@ -65,7 +65,7 @@ Content
 
 The content blocks that make up unstructured results: returned from tools and
 prompts. Simple handlers can return a single :class:`str`, which is converted to a
-:class:`~aiohttp_mcp.TextContent`, others must return a sequence of the classes
+:class:`~aiohttp_mcp_server.TextContent`, others must return a sequence of the classes
 below, like::
 
     return [ImageContent.from_file(Path("foo/bar.jpeg")), TextContent("Check the image")]
@@ -73,27 +73,27 @@ below, like::
 In prompt messages, bare content blocks become ``user`` messages; wrap a
 block in a :class:`Message` for other roles.
 
-.. autoclass:: aiohttp_mcp.Content()
+.. autoclass:: aiohttp_mcp_server.Content()
 
-.. autoclass:: aiohttp_mcp.TextContent
+.. autoclass:: aiohttp_mcp_server.TextContent
 
-.. autoclass:: aiohttp_mcp.ImageContent
+.. autoclass:: aiohttp_mcp_server.ImageContent
 
-.. autoclass:: aiohttp_mcp.AudioContent
+.. autoclass:: aiohttp_mcp_server.AudioContent
 
-.. autoclass:: aiohttp_mcp.ResourceLink
+.. autoclass:: aiohttp_mcp_server.ResourceLink
 
-.. autoclass:: aiohttp_mcp.EmbeddedResource()
+.. autoclass:: aiohttp_mcp_server.EmbeddedResource()
 
 
 Resources
 =========
 
-.. autoclass:: aiohttp_mcp.ResourceRegistry
+.. autoclass:: aiohttp_mcp_server.ResourceRegistry
 
-.. autoclass:: aiohttp_mcp.Resource
+.. autoclass:: aiohttp_mcp_server.Resource
 
-.. autoclass:: aiohttp_mcp.ResourceContents
+.. autoclass:: aiohttp_mcp_server.ResourceContents
 
 .. autotype:: ResourceHandler
 
@@ -107,60 +107,60 @@ Resources
 Elicitation
 ===========
 
-.. autoclass:: aiohttp_mcp.Elicitation()
+.. autoclass:: aiohttp_mcp_server.Elicitation()
 
-.. autoclass:: aiohttp_mcp.FormElicitation
+.. autoclass:: aiohttp_mcp_server.FormElicitation
 
-.. autoclass:: aiohttp_mcp.URLElicitation
+.. autoclass:: aiohttp_mcp_server.URLElicitation
 
-.. autoclass:: aiohttp_mcp.SecureFormElicitation
+.. autoclass:: aiohttp_mcp_server.SecureFormElicitation
 
 .. autotype:: RenderForm
 
-   Replaces the hosted secure-form page; see :func:`~aiohttp_mcp.setup`'s
+   Replaces the hosted secure-form page; see :func:`~aiohttp_mcp_server.setup`'s
    ``render_form``. The returned page must satisfy the contract documented
    on :class:`FormContext`.
 
-.. autoclass:: aiohttp_mcp.FormContext()
+.. autoclass:: aiohttp_mcp_server.FormContext()
 
-.. autoclass:: aiohttp_mcp.ElicitResult()
+.. autoclass:: aiohttp_mcp_server.ElicitResult()
 
-.. autoclass:: aiohttp_mcp.InputRequired
+.. autoclass:: aiohttp_mcp_server.InputRequired
 
 .. _aiohttp-mcp-field-schemas:
 
 Form fields
 +++++++++++
 
-.. autoclass:: aiohttp_mcp.FieldSchema()
+.. autoclass:: aiohttp_mcp_server.FieldSchema()
 
-.. autoclass:: aiohttp_mcp.StringSchema
+.. autoclass:: aiohttp_mcp_server.StringSchema
 
-.. autoclass:: aiohttp_mcp.IntegerSchema
+.. autoclass:: aiohttp_mcp_server.IntegerSchema
 
-.. autoclass:: aiohttp_mcp.NumberSchema
+.. autoclass:: aiohttp_mcp_server.NumberSchema
 
-.. autoclass:: aiohttp_mcp.BooleanSchema
+.. autoclass:: aiohttp_mcp_server.BooleanSchema
 
-.. autoclass:: aiohttp_mcp.EnumSchema
+.. autoclass:: aiohttp_mcp_server.EnumSchema
 
-.. autoclass:: aiohttp_mcp.MultiSelectEnumSchema
+.. autoclass:: aiohttp_mcp_server.MultiSelectEnumSchema
 
 Common types
 ============
 
-.. autoclass:: aiohttp_mcp.Icon
+.. autoclass:: aiohttp_mcp_server.Icon
 
-.. autoclass:: aiohttp_mcp.MCPRequest()
+.. autoclass:: aiohttp_mcp_server.MCPRequest()
 
 Authorization
 =============
 
-.. autoclass:: aiohttp_mcp.Authorization
+.. autoclass:: aiohttp_mcp_server.Authorization
 
-.. autoclass:: aiohttp_mcp.IntrospectionAuthorization
+.. autoclass:: aiohttp_mcp_server.IntrospectionAuthorization
 
-.. autoclass:: aiohttp_mcp.jwt.JWTAuthorization
+.. autoclass:: aiohttp_mcp_server.jwt.JWTAuthorization
 
 .. autotype:: TokenValidator
 
@@ -172,7 +172,7 @@ Authorization
    is this server's canonical ``resource`` URI (:rfc:`8707`). Tokens issued for any
    other resource MUST be rejected by returning ``None``.
 
-.. autoclass:: aiohttp_mcp.TokenInfo()
+.. autoclass:: aiohttp_mcp_server.TokenInfo()
 
 .. autodata:: TOKEN_INFO_KEY
    :no-value:
@@ -182,7 +182,7 @@ Local Authorization
 
 A bundled authorization server for simple deployments.
 
-.. autoclass:: aiohttp_mcp.LocalAuthorization
+.. autoclass:: aiohttp_mcp_server.LocalAuthorization
 
 .. autotype:: ScopeMatcher
 
@@ -210,4 +210,4 @@ A bundled authorization server for simple deployments.
    Renders the consent page; see :class:`ConsentContext` for the contract the
    returned page must satisfy.
 
-.. autoclass:: aiohttp_mcp.ConsentContext()
+.. autoclass:: aiohttp_mcp_server.ConsentContext()

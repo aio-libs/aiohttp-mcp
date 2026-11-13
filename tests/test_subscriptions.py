@@ -5,7 +5,7 @@ import asyncio
 from aiohttp import web
 from pytest_aiohttp import AiohttpClient
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from _helpers import (
     META_SERVER_INFO,
     META_SUBSCRIPTION_ID,
@@ -15,8 +15,8 @@ from _helpers import (
     request_body,
     request_headers,
 )
-from aiohttp_mcp._protocol import InputResult, JSONRPCNotification
-from aiohttp_mcp._transport import MCPRequest, Method
+from aiohttp_mcp_server._protocol import InputResult, JSONRPCNotification
+from aiohttp_mcp_server._transport import MCPRequest, Method
 
 
 async def test_listen_acknowledged(make_client: MakeClient) -> None:
@@ -73,7 +73,7 @@ async def test_listen_invalid_filter(make_client: MakeClient) -> None:
 async def test_emit_from_simple_method(aiohttp_client: AiohttpClient) -> None:
     """A non-streaming method emitting a message is a loud server-side error."""
     app = web.Application()
-    server = aiohttp_mcp.setup(app, name="test-server", version="1.2.3")
+    server = mcp.setup(app, name="test-server", version="1.2.3")
 
     async def bad(req: MCPRequest) -> InputResult:
         notification: JSONRPCNotification = {
@@ -133,7 +133,7 @@ async def test_listen_graceful_shutdown(make_client: MakeClient) -> None:
 
 async def test_listen_disconnect_cancels(aiohttp_client: AiohttpClient) -> None:
     app = web.Application()
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         app, name="test-server", version="1.2.3", sse_keepalive=0.05
     )
     client = await aiohttp_client(app)
@@ -153,7 +153,7 @@ async def test_listen_disconnect_cancels(aiohttp_client: AiohttpClient) -> None:
 
 async def test_concurrent_subscriptions(aiohttp_client: AiohttpClient) -> None:
     app = web.Application()
-    server = aiohttp_mcp.setup(app, name="test-server", version="1.2.3")
+    server = mcp.setup(app, name="test-server", version="1.2.3")
     client = await aiohttp_client(app)
     headers = request_headers("subscriptions/listen")
     async with (

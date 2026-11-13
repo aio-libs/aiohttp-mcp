@@ -5,15 +5,15 @@ Authorization
 MCP uses `OAuth 2.1
 <https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization>`_:
 the MCP server acts as a *resource server*, accepting Bearer tokens issued by
-an *authorization server*. :mod:`aiohttp_mcp` ships both halves:
+an *authorization server*. :mod:`aiohttp_mcp_server` ships both halves:
 
-- :class:`~aiohttp_mcp.Authorization` implements the resource-server side:
+- :class:`~aiohttp_mcp_server.Authorization` implements the resource-server side:
   it serves the Protected Resource Metadata document (:rfc:`9728`) that
   clients use to discover the authorization server, challenges requests with
   ``WWW-Authenticate`` headers (including scope guidance), and rejects
   malformed credentials. Token validation is delegated to a
-  :data:`~aiohttp_mcp.TokenValidator` callable.
-- :class:`~aiohttp_mcp.LocalAuthorization` extends it into a complete,
+  :data:`~aiohttp_mcp_server.TokenValidator` callable.
+- :class:`~aiohttp_mcp_server.LocalAuthorization` extends it into a complete,
   self-contained setup: the same application also acts as the authorization
   server, hosting the login and consent pages and issuing the tokens. This is
   best used for small single-user deployments where an authorization server is
@@ -74,11 +74,11 @@ Theme the consent page
 
 The consent (approval) page is a minimal HTML form; replace it by passing
 ``render_consent=`. The page must POST back to the same URL with the fields from
-:attr:`aiohttp_mcp.ConsentContext.fields`
-(:attr:`~aiohttp_mcp.ConsentContext.hidden_fields_html` renders them
+:attr:`aiohttp_mcp_server.ConsentContext.fields`
+(:attr:`~aiohttp_mcp_server.ConsentContext.hidden_fields_html` renders them
 already escaped, including the anti-forgery token) plus an ``action`` of
 ``"approve"`` or ``"deny"``. Note that
-:attr:`~aiohttp_mcp.ConsentContext.client_name` is supplied by the client, so
+:attr:`~aiohttp_mcp_server.ConsentContext.client_name` is supplied by the client, so
 it must be HTML-escaped:
 
 .. literalinclude:: code/authorization.py
@@ -93,8 +93,8 @@ to validate the tokens from that server. We provide 2 helpers to validate common
 token schemes, otherwise a custom function will need to be used.
 
 **JWT access tokens** (:rfc:`9068`) can be validated with the
-:class:`aiohttp_mcp.jwt.JWTAuthorization` helper. This requires the ``jwt`` extra
-to be installed (``pip install aiohttp-mcp[jwt]``):
+:class:`aiohttp_mcp_server.jwt.JWTAuthorization` helper. This requires the ``jwt`` extra
+to be installed (``pip install aiohttp-mcp-server[jwt]``):
 
 .. literalinclude:: code/authorization.py
    :pyobject: jwt_authorization
@@ -103,7 +103,7 @@ to be installed (``pip install aiohttp-mcp[jwt]``):
 
 **Opaque tokens** can be validated by asking the authorization server per
 request via Token Introspection (:rfc:`7662`). For this case, the
-:class:`~aiohttp_mcp.IntrospectionAuthorization` helper exists.
+:class:`~aiohttp_mcp_server.IntrospectionAuthorization` helper exists.
 
 .. literalinclude:: code/authorization.py
    :pyobject: introspection_authorization
@@ -111,7 +111,7 @@ request via Token Introspection (:rfc:`7662`). For this case, the
    :dedent:
 
 If neither of these can be used with your chosen server, supply a custom
-:data:`~aiohttp_mcp.TokenValidator` function to :class:`~aiohttp_mcp.Authorization`. The
+:data:`~aiohttp_mcp_server.TokenValidator` function to :class:`~aiohttp_mcp_server.Authorization`. The
 implementation must verify the token, check that it is still valid, and check its
 audience is the canonical ``resource`` URI (:rfc:`8707`), returning ``None`` to reject:
 
@@ -133,7 +133,7 @@ First, include the sub-application's public mount prefix in ``resource``
 (``"https://mcp.server.example/api"`` below). Second, use
 ``well_known_routes=False`` to skip adding the well-known endpoints to the
 sub-application and call
-:func:`~aiohttp_mcp.LocalAuthorization.register_well_known` with the root
+:func:`~aiohttp_mcp_server.LocalAuthorization.register_well_known` with the root
 application instead.
 
 .. literalinclude:: code/authorization.py
@@ -142,8 +142,8 @@ application instead.
 Accessing the token from handlers
 =================================
 
-The validated :class:`~aiohttp_mcp.TokenInfo` is stored on the request under
-:data:`~aiohttp_mcp.TOKEN_INFO_KEY`, where the rest of the application can
+The validated :class:`~aiohttp_mcp_server.TokenInfo` is stored on the request under
+:data:`~aiohttp_mcp_server.TOKEN_INFO_KEY`, where the rest of the application can
 read the subject and scopes:
 
 .. literalinclude:: code/authorization.py

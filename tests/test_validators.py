@@ -12,7 +12,7 @@ from aiohttp.test_utils import TestClient, make_mocked_request
 from pytest_aiohttp import AiohttpClient
 
 from _helpers import MakeClient, request_body, request_headers
-from aiohttp_mcp import IntrospectionAuthorization, setup
+from aiohttp_mcp_server import IntrospectionAuthorization, setup
 
 RESOURCE_BASE = "https://mcp.server.test"
 RESOURCE = "https://mcp.server.test/mcp"
@@ -261,7 +261,7 @@ async def test_introspection_cache_eviction(
 ) -> None:
     """Expired entries are evicted from the cache as new ones are inserted."""
     with mock.patch(
-        "aiohttp_mcp._validators.time.time", autospec=True, spec_set=True, return_value=10
+        "aiohttp_mcp_server._validators.time.time", autospec=True, spec_set=True, return_value=10
     ) as mock_time:
         fake_as.grant("short", exp=time.time() + 5)  # entry capped at token exp
         fake_as.grant("long")

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from ._server import MCPServer
     from ._transport import MCPRequest
 
-logger = logging.getLogger("aiohttp_mcp")
+logger = logging.getLogger("aiohttp_mcp_server")
 
 _STATE_TTL: Final = 600.0
 _MAX_PENDING_FORMS: Final = 1024
@@ -364,7 +364,7 @@ class SecureFormElicitation(Elicitation):
     Requires authorization (the values are bound to the caller's subject)
     and a way to identify the browser user: automatic when
     :class:`.LocalAuthorization` is in use, otherwise pass ``authenticate_request``
-    to :func:`~aiohttp_mcp.setup`. Pending submissions are held in memory,
+    to :func:`~aiohttp_mcp_server.setup`. Pending submissions are held in memory,
     so multi-worker deployments need sticky routing to the worker that
     issued the link.
 
@@ -423,7 +423,7 @@ class ElicitResult:
 class InputRequired(Exception):
     """Terminate the current attempt, asking the client for user input.
 
-    Raised by :meth:`~aiohttp_mcp.MCPRequest.elicit`, or directly by a
+    Raised by :meth:`~aiohttp_mcp_server.MCPRequest.elicit`, or directly by a
     handler to batch several requests into one round trip or, with no
     new requests at all, to signal that an out-of-band interaction has not
     completed yet, allowing the client to retry.
@@ -432,7 +432,7 @@ class InputRequired(Exception):
         to retrieve their responses on the retry.
     :param state: Application state echoed back by the client. It is
         HMAC-signed, bound to the caller and request, and available as
-        :attr:`~aiohttp_mcp.MCPRequest.state` on the retry. Must be JSON-serializable.
+        :attr:`~aiohttp_mcp_server.MCPRequest.state` on the retry. Must be JSON-serializable.
     """
 
     elicitations: Mapping[str, Elicitation]

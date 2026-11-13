@@ -85,7 +85,7 @@ retry process in the above example while waiting for the user input.
 
 When using :class:`.LocalAuthorization`, the login session is used automatically to
 identify the browser user. For other cases, pass ``authenticate_request`` to
-:func:`~aiohttp_mcp.setup` (with :mod:`aiohttp_security`, use
+:func:`~aiohttp_mcp_server.setup` (with :mod:`aiohttp_security`, use
 :func:`~aiohttp_security.authorized_userid`). Pending submissions are held in memory,
 so a multi-worker deployment needs sticky routing for the form pages.
 

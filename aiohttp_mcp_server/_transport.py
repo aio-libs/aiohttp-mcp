@@ -65,7 +65,7 @@ from ._protocol import (
 if TYPE_CHECKING:
     from ._server import MCPServer
 
-logger = logging.getLogger("aiohttp_mcp")
+logger = logging.getLogger("aiohttp_mcp_server")
 
 
 class MCPRequest:

@@ -84,17 +84,17 @@ qthelp:
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
 	      ".qhcp project file in $(BUILDDIR)/qthelp, like this:"
-	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/aiohttp-mcp.qhcp"
+	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/aiohttp-mcp-server.qhcp"
 	@echo "To view the help file:"
-	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/aiohttp-mcp.qhc"
+	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/aiohttp-mcp-server.qhc"
 
 devhelp:
 	$(SPHINXBUILD) -b devhelp $(ALLSPHINXOPTS) $(BUILDDIR)/devhelp
 	@echo
 	@echo "Build finished."
 	@echo "To view the help file:"
-	@echo "# mkdir -p $$HOME/.local/share/devhelp/aiohttp-mcp"
-	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/aiohttp-mcp"
+	@echo "# mkdir -p $$HOME/.local/share/devhelp/aiohttp-mcp-server"
+	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/aiohttp-mcp-server"
 	@echo "# devhelp"
 
 epub:

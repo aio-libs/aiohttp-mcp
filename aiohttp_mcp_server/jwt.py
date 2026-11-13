@@ -1,6 +1,6 @@
 """JWT access-token validation (RFC 9068) for an external authorization server.
 
-Requires the ``jwt`` extra (``pip install aiohttp-mcp[jwt]``).
+Requires the ``jwt`` extra (``pip install aiohttp-mcp-server[jwt]``).
 """
 
 import logging
@@ -14,7 +14,7 @@ from yarl import URL
 from ._auth import Authorization, ScopeMatcher, TokenInfo, _secure_url
 from ._validators import _discover_metadata
 
-logger = logging.getLogger("aiohttp_mcp")
+logger = logging.getLogger("aiohttp_mcp_server")
 
 # Asymmetric signature algorithms only: a resource server must never accept
 # an HMAC algorithm, where the public key would also sign forgeries.

@@ -12,7 +12,7 @@ from aiohttp.test_utils import TestClient
 from pydantic import Field
 
 from _helpers import MakeClient, request_body, request_headers
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     Authorization,
     Doc,
     MCPRequest,

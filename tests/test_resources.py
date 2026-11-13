@@ -14,7 +14,7 @@ from _helpers import (
     request_body,
     request_headers,
 )
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     Content,
     EmbeddedResource,
     Icon,

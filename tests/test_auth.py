@@ -13,7 +13,7 @@ from multidict import CIMultiDict, MultiDict
 from pytest_aiohttp import AiohttpClient
 
 from _helpers import MakeClient, next_sse_data, request_body, request_headers
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     Authorization,
     Prompt,
     PromptRegistry,
@@ -24,8 +24,8 @@ from aiohttp_mcp import (
     ToolRegistry,
     setup,
 )
-from aiohttp_mcp._protocol import InputResult
-from aiohttp_mcp._transport import MCPRequest, Method
+from aiohttp_mcp_server._protocol import InputResult
+from aiohttp_mcp_server._transport import MCPRequest, Method
 
 CONN_KEY = web.RequestKey("conn", object)
 RESOURCE_BASE = "https://mcp.server.test"

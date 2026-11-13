@@ -49,7 +49,7 @@ if sys.version_info >= (3, 12):
 else:
     from typing_extensions import TypeAliasType, TypedDict
 
-logger = logging.getLogger("aiohttp_mcp")
+logger = logging.getLogger("aiohttp_mcp_server")
 
 _T = TypeVar("_T")
 # TODO(PY312): use the `type` statement.

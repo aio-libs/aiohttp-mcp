@@ -5,7 +5,7 @@ from typing import Any
 from aiohttp import ClientResponse, web
 from pytest_aiohttp import AiohttpClient
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from _helpers import (
     META_CAPABILITIES,
     META_SERVER_INFO,
@@ -423,8 +423,8 @@ async def test_name_header_bad_base64(make_client: MakeClient) -> None:
 
 async def test_second_endpoint(make_client: MakeClient, aiohttp_client: AiohttpClient) -> None:
     app = web.Application()
-    aiohttp_mcp.setup(app, name="one", version="1.0")
-    aiohttp_mcp.setup(app, name="two", version="2.0", path="/other")
+    mcp.setup(app, name="one", version="1.0")
+    mcp.setup(app, name="two", version="2.0", path="/other")
     client = await aiohttp_client(app)
     for path, name in (("/mcp", "one"), ("/other", "two")):
         async with client.post(

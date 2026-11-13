@@ -4,7 +4,7 @@ import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from aiohttp import web
 
 check_credentials: Callable[[str, str, web.Request], Awaitable[bool]]
@@ -17,9 +17,9 @@ def self_contained(app: web.Application) -> None:
             password, os.environ["MCP_PASSWORD"]
         )
 
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
-        authorization=aiohttp_mcp.LocalAuthorization(
+        authorization=mcp.LocalAuthorization(
             check_credentials,
             resource="https://mcp.server.example",
             secret=bytes.fromhex(os.environ["MCP_TOKEN_KEY"]),
@@ -30,9 +30,9 @@ def self_contained(app: web.Application) -> None:
 def app_login(app: web.Application) -> None:
     from aiohttp_security import authorized_userid
 
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
-        authorization=aiohttp_mcp.LocalAuthorization(
+        authorization=mcp.LocalAuthorization(
             resource="https://mcp.server.example",
             secret=bytes.fromhex(os.environ["MCP_TOKEN_KEY"]),
             authenticate_request=authorized_userid,
@@ -41,7 +41,7 @@ def app_login(app: web.Application) -> None:
     )
 
 
-async def render_consent(request: web.Request, ctx: aiohttp_mcp.ConsentContext) -> web.StreamResponse:
+async def render_consent(request: web.Request, ctx: mcp.ConsentContext) -> web.StreamResponse:
     # The client name is self-asserted; where the code is sent is not. The
     # page must display ctx.redirect_host, and should warn when the code
     # goes to the local machine (any local program could be listening).
@@ -65,9 +65,9 @@ async def render_consent(request: web.Request, ctx: aiohttp_mcp.ConsentContext) 
 
 
 def jwt_authorization(app: web.Application) -> None:
-    from aiohttp_mcp.jwt import JWTAuthorization
+    from aiohttp_mcp_server.jwt import JWTAuthorization
 
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
         authorization=JWTAuthorization(
             issuer="https://auth.server.example",
@@ -77,9 +77,9 @@ def jwt_authorization(app: web.Application) -> None:
 
 
 def introspection_authorization(app: web.Application) -> None:
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
-        authorization=aiohttp_mcp.IntrospectionAuthorization(
+        authorization=mcp.IntrospectionAuthorization(
             issuer="https://auth.server.example",
             client_id="my-mcp-server",
             client_secret=os.environ["INTROSPECTION_SECRET"],
@@ -92,19 +92,19 @@ def introspection_authorization(app: web.Application) -> None:
 def external_authorization_server(app: web.Application) -> None:
     resource_name = "https://mcp.server.example/mcp"
 
-    async def validate_token(token: str, request: web.Request) -> aiohttp_mcp.TokenInfo | None:
+    async def validate_token(token: str, request: web.Request) -> mcp.TokenInfo | None:
         claims = introspect(token)  # e.g. RFC 7662 token introspection
         if not claims.get("active") or resource_name not in claims.get("aud", ()):
             return None
-        return aiohttp_mcp.TokenInfo(
+        return mcp.TokenInfo(
             scopes=frozenset(claims.get("scope", "").split()),
             subject=claims.get("sub"),
             claims=claims,
         )
 
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
-        authorization=aiohttp_mcp.Authorization(
+        authorization=mcp.Authorization(
             validate_token,
             resource="https://mcp.server.example",
             auth_servers=("https://auth.server.example",),
@@ -115,15 +115,15 @@ def external_authorization_server(app: web.Application) -> None:
 
 def sub_application(root: web.Application) -> None:
     api = web.Application()
-    auth = aiohttp_mcp.LocalAuthorization(
+    auth = mcp.LocalAuthorization(
         check_credentials,
         resource="https://mcp.server.example/api",
         secret=bytes.fromhex(os.environ["MCP_TOKEN_KEY"]),
     )
-    aiohttp_mcp.setup(api, authorization=auth, well_known_routes=False)
+    mcp.setup(api, authorization=auth, well_known_routes=False)
     root.add_subapp("/api", api)
     auth.register_well_known(root)
 
 
 def token_handlers(request: web.Request) -> None:
-   token_info = request[aiohttp_mcp.TOKEN_INFO_KEY]
+   token_info = request[mcp.TOKEN_INFO_KEY]

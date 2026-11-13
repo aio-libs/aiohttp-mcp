@@ -150,7 +150,7 @@ class MCPServer:
     def host_allowed(self, host: str | None) -> bool:
         """Whether ``host`` is one this server is legitimately addressed as.
 
-        The ``allowed_origins`` policy from :func:`~aiohttp_mcp.setup`.
+        The ``allowed_origins`` policy from :func:`~aiohttp_mcp_server.setup`.
         Application handlers should check this before building an absolute
         URL on the request's origin - the ``Host`` header behind
         :attr:`~aiohttp.web.BaseRequest.url` is client-controlled.

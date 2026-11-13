@@ -10,7 +10,7 @@ from aiohttp.test_utils import TestClient
 from pytest_aiohttp import AiohttpClient
 
 from _helpers import MakeClient, request_body, request_headers
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     Authorization,
     BooleanSchema,
     EnumSchema,
@@ -29,7 +29,7 @@ from aiohttp_mcp import (
     URLElicitation,
     setup,
 )
-from aiohttp_mcp._transport import Method
+from aiohttp_mcp_server._transport import Method
 
 FORM_CAPS: dict[str, object] = {"elicitation": {"form": {}}}
 ALL_CAPS: dict[str, object] = {"elicitation": {"form": {}, "url": {}}}
@@ -255,7 +255,7 @@ async def test_tampered_state(make_client: MakeClient) -> None:
 
 async def test_expired_state(make_client: MakeClient) -> None:
     client = await make_client(prompts=PromptRegistry(book_flight))
-    with mock.patch("aiohttp_mcp._elicitation._STATE_TTL", -1.0):
+    with mock.patch("aiohttp_mcp_server._elicitation._STATE_TTL", -1.0):
         _requests, state = await first_round(client)
     async with get_prompt(
         client,

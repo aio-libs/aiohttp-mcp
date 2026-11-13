@@ -9,7 +9,7 @@ from aiohttp.test_utils import TestClient
 from multidict import CIMultiDict
 
 from _helpers import MakeClient, request_body, request_headers
-from aiohttp_mcp import Doc, Header, ToolRegistry
+from aiohttp_mcp_server import Doc, Header, ToolRegistry
 
 Client = TestClient[web.Request, web.Application]
 

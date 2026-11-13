@@ -4,8 +4,8 @@ Prompts
 
 `Prompts <https://modelcontextprotocol.io/specification/2026-07-28/server/prompts>`_
 are user-controlled (typically invoked by a slash command) templates a server offers for
-interacting with a language model. Passing a :class:`~aiohttp_mcp.PromptRegistry` to
-:func:`aiohttp_mcp.setup` enables the ``prompts`` capability:
+interacting with a language model. Passing a :class:`~aiohttp_mcp_server.PromptRegistry` to
+:func:`aiohttp_mcp_server.setup` enables the ``prompts`` capability:
 
 .. literalinclude:: code/prompts.py
    :pyobject: prompts_setup
@@ -20,14 +20,14 @@ the signature:
   its description (:pep:`257`).
 * Parameters become the prompt's arguments, which must be :class:`str` values.
 * Parameters without a default are required.
-* :data:`~typing.Annotated` metadata marked with :class:`~aiohttp_mcp.Doc`
+* :data:`~typing.Annotated` metadata marked with :class:`~aiohttp_mcp_server.Doc`
   becomes the argument description.
 
-Use the :class:`~aiohttp_mcp.Prompt` descriptor to override the
+Use the :class:`~aiohttp_mcp_server.Prompt` descriptor to override the
 derived metadata (``name``, ``title``, ``description``, ``icons``).
 
 A prompt may also declare a first parameter annotated
-:class:`~aiohttp_mcp.MCPRequest` to receive the in-flight request. This gives
+:class:`~aiohttp_mcp_server.MCPRequest` to receive the in-flight request. This gives
 access to the underlying :class:`~aiohttp.web.Request`, the client's
 identity, and the validated token of an authorized caller. It is not
 advertised as a prompt argument.
@@ -54,7 +54,7 @@ important it is:
    :pyobject: style_guide
 
 For multi-message templates (e.g. worked examples with assistant turns),
-wrap content in :class:`~aiohttp_mcp.Message` to set the role:
+wrap content in :class:`~aiohttp_mcp_server.Message` to set the role:
 
 .. literalinclude:: code/prompts.py
    :pyobject: plan_feature

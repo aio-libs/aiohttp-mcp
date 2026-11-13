@@ -24,8 +24,8 @@ from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
 from _helpers import MakeClient, request_body, request_headers
-from aiohttp_mcp import ConsentContext, LocalAuthorization, setup
-from aiohttp_mcp._auth_server import _b64, _PublicHostResolver, _Signer
+from aiohttp_mcp_server import ConsentContext, LocalAuthorization, setup
+from aiohttp_mcp_server._auth_server import _b64, _PublicHostResolver, _Signer
 
 RESOURCE_BASE = "https://mcp.server.test"
 RESOURCE = "https://mcp.server.test/mcp"
@@ -45,7 +45,7 @@ def allow_local_cimd() -> Iterator[None]:
     """Lift the public-hosts-only CIMD fetch policy for loopback test servers."""
 
     with mock.patch(
-        "aiohttp_mcp._auth_server._cimd_url_allowed", autospec=True, return_value=True
+        "aiohttp_mcp_server._auth_server._cimd_url_allowed", autospec=True, return_value=True
     ):
         yield
 
@@ -262,7 +262,7 @@ async def test_login_sets_scoped_cookie(make_client: MakeClient) -> None:
     client = await make_client(authorization=make_auth())
     async with login(client) as resp:
         assert resp.status == 303
-        cookie = resp.cookies["aiohttp_mcp_session"]
+        cookie = resp.cookies["aiohttp_mcp_server_session"]
     assert cookie["path"] == "/oauth2"
     assert cookie["httponly"]
     assert cookie["samesite"] == "Lax"
@@ -274,7 +274,7 @@ async def test_login_wrong_password_reprompts(make_client: MakeClient) -> None:
     async with login(client, password="hearts") as resp:
         assert resp.status == 200
         assert "Invalid credentials" in await resp.text()
-        assert "aiohttp_mcp_session" not in resp.cookies
+        assert "aiohttp_mcp_server_session" not in resp.cookies
 
 
 async def test_login_open_redirect_blocked(make_client: MakeClient) -> None:
@@ -681,7 +681,7 @@ async def test_cimd_cache_bounded(aiohttp_client: AiohttpClient, allow_local_cim
     client = await aiohttp_client(app)
 
     client_ids = [f"http://127.0.0.1:{client.port}/client/{n}" for n in range(3)]
-    with mock.patch("aiohttp_mcp._auth_server._CIMD_CACHE_MAX", 2):
+    with mock.patch("aiohttp_mcp_server._auth_server._CIMD_CACHE_MAX", 2):
         for client_id in client_ids:
             await authorization._resolve_client(client_id)
     assert len(authorization._cimd_cache) == 2
@@ -976,7 +976,7 @@ async def test_sub_application(aiohttp_client: AiohttpClient) -> None:
     ) as resp:
         assert resp.status == 303
         assert resp.headers["Location"].startswith("/api/oauth2/authorize")
-        cookie = resp.cookies["aiohttp_mcp_session"]
+        cookie = resp.cookies["aiohttp_mcp_server_session"]
         assert cookie["path"] == "/api/oauth2"  # still scoped to the endpoints
         resume = resp.headers["Location"]
 
@@ -1048,7 +1048,7 @@ async def test_insecure_redirect_uris_rejected(
 
 def test_signer_payload_tripwire(caplog: pytest.LogCaptureFixture) -> None:
     signer = _Signer(SECRET)
-    with caplog.at_level(logging.ERROR, logger="aiohttp_mcp"):
+    with caplog.at_level(logging.ERROR, logger="aiohttp_mcp_server"):
         assert signer.verify("garbage") is None
         assert signer.verify("Z2FyYmFnZQ.wrong-signature") is None
         assert not caplog.records
@@ -1193,7 +1193,7 @@ async def test_cimd_dns_rebinding_rejected(make_client: MakeClient) -> None:
     stub = _StubResolver("127.0.0.1", port=port)
     try:
         with mock.patch(
-            "aiohttp_mcp._auth_server.DefaultResolver", return_value=stub
+            "aiohttp_mcp_server._auth_server.DefaultResolver", return_value=stub
         ):
             client = await make_client(authorization=make_auth())
             _, challenge = pkce()
@@ -1226,7 +1226,7 @@ async def test_cimd_dns_rebinding_rejected(make_client: MakeClient) -> None:
 )
 async def test_public_host_resolver_rejects(addresses: tuple[str, ...]) -> None:
     with mock.patch(
-        "aiohttp_mcp._auth_server.DefaultResolver", return_value=_StubResolver(*addresses)
+        "aiohttp_mcp_server._auth_server.DefaultResolver", return_value=_StubResolver(*addresses)
     ):
         resolver = _PublicHostResolver()
     with pytest.raises(OSError):
@@ -1235,7 +1235,7 @@ async def test_public_host_resolver_rejects(addresses: tuple[str, ...]) -> None:
 
 async def test_public_host_resolver_allows_public() -> None:
     with mock.patch(
-        "aiohttp_mcp._auth_server.DefaultResolver",
+        "aiohttp_mcp_server._auth_server.DefaultResolver",
         return_value=_StubResolver("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"),
     ):
         resolver = _PublicHostResolver()

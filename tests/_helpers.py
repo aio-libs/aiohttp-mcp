@@ -7,7 +7,7 @@ from typing import Any
 from aiohttp import ClientResponse, web
 from aiohttp.test_utils import TestClient
 
-from aiohttp_mcp._protocol import JSONRPCRequest, RequestId
+from aiohttp_mcp_server._protocol import JSONRPCRequest, RequestId
 
 MakeClient = Callable[..., Awaitable[TestClient[web.Request, web.Application]]]
 
