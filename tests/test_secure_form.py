@@ -15,9 +15,9 @@ from multidict import MultiDict
 from pytest_aiohttp import AiohttpClient
 from yarl import URL
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from _helpers import MakeClient, request_body, request_headers
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     AuthenticateRequest,
     Authorization,
     BooleanSchema,
@@ -33,7 +33,7 @@ from aiohttp_mcp import (
     StringSchema,
     TokenInfo,
 )
-from aiohttp_mcp._elicitation import _PendingForm
+from aiohttp_mcp_server._elicitation import _PendingForm
 
 ALL_CAPS: dict[str, object] = {"elicitation": {"form": {}, "url": {}}}
 TOKENS = {
@@ -81,7 +81,7 @@ make_auth = functools.partial(
 @pytest.fixture(autouse=True)
 def _no_form_wait(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Answer pending-form retries immediately; waiting tests override this."""
-    with mock.patch("aiohttp_mcp._elicitation._FORM_WAIT", 0):
+    with mock.patch("aiohttp_mcp_server._elicitation._FORM_WAIT", 0):
         yield
 
 
@@ -216,7 +216,7 @@ async def test_retry_held_until_submission(
     make_client: MakeClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A retry with a pending form blocks and completes on submission."""
-    monkeypatch.setattr("aiohttp_mcp._elicitation._FORM_WAIT", 30)
+    monkeypatch.setattr("aiohttp_mcp_server._elicitation._FORM_WAIT", 30)
     attempting = asyncio.Event()
 
     async def set_key(request: MCPRequest) -> str:
@@ -250,7 +250,7 @@ async def test_retry_held_until_submission(
 async def test_retry_wait_times_out(
     make_client: MakeClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("aiohttp_mcp._elicitation._FORM_WAIT", 0.05)
+    monkeypatch.setattr("aiohttp_mcp_server._elicitation._FORM_WAIT", 0.05)
     client = await make_secure_client(make_client)
     _, state = await start_flow(client)
 
@@ -375,7 +375,7 @@ async def test_not_configured_is_internal_error(
         assert resp.status == 500
         assert (await resp.json())["error"]["code"] == -32603
     assert any(
-        r.name == "aiohttp_mcp"
+        r.name == "aiohttp_mcp_server"
         and r.levelno == logging.ERROR
         and "browser identity" in r.message
         for r in caplog.records
@@ -396,7 +396,7 @@ async def test_unrecognised_host_rejected(make_client: MakeClient) -> None:
 
 async def test_pending_forms_bounded(aiohttp_client: AiohttpClient) -> None:
     app = web.Application()
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         app,
         authorization=make_auth(),
         authenticate_request=browser_user,
@@ -411,7 +411,7 @@ async def test_pending_forms_bounded(aiohttp_client: AiohttpClient) -> None:
     heapq.heappush(server._form_expiries, (time.time() - 1, "stale"))
 
     paths = []
-    with mock.patch("aiohttp_mcp._elicitation._MAX_PENDING_FORMS", 3):
+    with mock.patch("aiohttp_mcp_server._elicitation._MAX_PENDING_FORMS", 3):
         for _ in range(5):  # Each first attempt mints a fresh ticket.
             path, _state = await start_flow(client)
             paths.append(path)
@@ -435,7 +435,7 @@ async def test_local_authorization_login_redirect(aiohttp_client: "AiohttpClient
         check_credentials, resource="https://mcp.server.test", secret=b"s" * 32
     )
     app = web.Application()
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         app, authorization=authorization, prompts=PromptRegistry(set_key)
     )
     client = await aiohttp_client(app)
@@ -465,7 +465,7 @@ async def test_login_redirect_under_sub_application(aiohttp_client: "AiohttpClie
         check_credentials, resource="https://mcp.server.test/api", secret=b"s" * 32
     )
     api = web.Application()
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         api,
         authorization=authorization,
         prompts=PromptRegistry(set_key),

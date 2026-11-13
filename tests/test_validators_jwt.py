@@ -23,7 +23,7 @@ pytest.importorskip(
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from aiohttp_mcp.jwt import JWTAuthorization
+from aiohttp_mcp_server.jwt import JWTAuthorization
 
 RESOURCE_BASE = "https://mcp.server.test"
 RESOURCE = "https://mcp.server.test/mcp"

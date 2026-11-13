@@ -1,5 +1,5 @@
 def minimal_setup() -> None:
-    import aiohttp_mcp
+    import aiohttp_mcp_server as mcp
     from aiohttp import web
 
     async def get_weather(location: str) -> str:
@@ -7,7 +7,7 @@ def minimal_setup() -> None:
         return f"Sunny in {location}."
 
     app = web.Application()
-    aiohttp_mcp.setup(app, tools=aiohttp_mcp.ToolRegistry(get_weather))
+    mcp.setup(app, tools=mcp.ToolRegistry(get_weather))
     web.run_app(app, handler_cancellation=True)
 
 
@@ -15,7 +15,7 @@ def remote_setup() -> None:
     import os
     import secrets
 
-    import aiohttp_mcp
+    import aiohttp_mcp_server as mcp
     from aiohttp import web
 
     async def check_credentials(username: str, password: str, request: web.Request) -> bool:
@@ -24,10 +24,10 @@ def remote_setup() -> None:
         )
 
     app = web.Application()
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
         allowed_origins=("mcp.server.example",),
-        authorization=aiohttp_mcp.LocalAuthorization(
+        authorization=mcp.LocalAuthorization(
             check_credentials,
             resource="https://mcp.server.example",
             secret=bytes.fromhex(os.environ["MCP_TOKEN_KEY"]),

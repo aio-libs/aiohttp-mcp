@@ -20,7 +20,7 @@ author = "aio-libs contributors"
 
 github_url = "https://github.com"
 github_repo_org = "aio-libs"
-github_repo_name = "aiohttp-mcp"
+github_repo_name = "aiohttp-mcp-server"
 github_repo_slug = f"{github_repo_org}/{github_repo_name}"
 github_repo_url = f"{github_url}/{github_repo_slug}"
 
@@ -106,16 +106,16 @@ spelling_ignore_wiki_words = True
 nitpicky = True
 # https://github.com/sphinx-doc/sphinx/issues/14462
 nitpick_ignore = [
-    ("py:class", "aiohttp_mcp._tools._T"),
-    ("py:obj", "aiohttp_mcp._tools._T"),
+    ("py:class", "aiohttp_mcp_server._tools._T"),
+    ("py:obj", "aiohttp_mcp_server._tools._T"),
 ]
 
 def _resolve_type_alias(app, env, node, contnode):
     # TODO: Drop this function when fixed: https://github.com/sphinx-doc/sphinx/issues/14745
     module, _, name = node["reftarget"].rpartition(".")
-    if not module.startswith("aiohttp_mcp._"):
+    if not module.startswith("aiohttp_mcp_server._"):
         return None
-    node["reftarget"] = target = f"aiohttp_mcp.{name}"
+    node["reftarget"] = target = f"aiohttp_mcp_server.{name}"
     return env.domains["py"].resolve_xref(
         env, node.get("refdoc"), app.builder, "obj", target, node, contnode
     )

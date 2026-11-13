@@ -86,7 +86,7 @@ class Authorization:
         ``"https://mcp.mydomain.example/api"``. Must be absolute ``http(s)``,
         canonical, without query or fragment. The canonical resource
         identifier that clients request tokens for is completed by
-        :func:`~aiohttp_mcp.setup`, which appends the MCP endpoint path — so
+        :func:`~aiohttp_mcp_server.setup`, which appends the MCP endpoint path — so
         the identifier always matches the endpoint it is served on.
     :param auth_servers: Issuer identifiers of at least one authorization
         server from which clients can obtain access tokens.

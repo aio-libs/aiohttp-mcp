@@ -14,7 +14,7 @@ component_management:
   individual_components:
     - component_id: project
       paths:
-        - aiohttp_mcp/**
+        - aiohttp_mcp_server/**
     - component_id: tests
       paths:
         - tests/**

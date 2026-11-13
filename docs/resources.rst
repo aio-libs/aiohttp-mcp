@@ -4,8 +4,8 @@ Resources
 
 `Resources <https://modelcontextprotocol.io/specification/2026-07-28/server/resources>`_
 expose data that a client can use (e.g. files, database records, application state etc.)
-each identified by a URI. Passing a :class:`~aiohttp_mcp.ResourceRegistry` to
-:func:`aiohttp_mcp.setup` enables the ``resources`` capability:
+each identified by a URI. Passing a :class:`~aiohttp_mcp_server.ResourceRegistry` to
+:func:`aiohttp_mcp_server.setup` enables the ``resources`` capability:
 
 .. literalinclude:: code/resources.py
    :pyobject: resources_setup
@@ -20,7 +20,7 @@ When the URI contains :rfc:`6570` template expressions, the resource is a
 URI a client reads. Only the two most common expansions are supported;
 ``{var}`` matches a single path segment and is percent-decoded, while ``{+var}``
 matches across ``/`` and is passed through as-is. An optional first
-parameter annotated :class:`~aiohttp_mcp.MCPRequest` receives the in-flight
+parameter annotated :class:`~aiohttp_mcp_server.MCPRequest` receives the in-flight
 request.
 
 Handlers can return a :class:`str` (text contents), :class:`bytes` (binary contents),

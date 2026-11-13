@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from aiohttp_mcp import (
+from aiohttp_mcp_server import (
     AudioContent,
     EmbeddedResource,
     Icon,

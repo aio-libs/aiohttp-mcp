@@ -52,7 +52,7 @@ PromptHandler = TypeAliasType("PromptHandler", Callable[..., Awaitable[PromptRes
 class Prompt:
     """A prompt template, overriding details derived from ``handler``.
 
-    Plain handler functions can be passed to :func:`aiohttp_mcp.setup`
+    Plain handler functions can be passed to :func:`aiohttp_mcp_server.setup`
     directly; wrap one in a ``Prompt`` to override the derived metadata or to
     restrict it to callers holding specific scopes.
 

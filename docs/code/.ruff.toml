@@ -2,4 +2,4 @@
 extend = "../../.ruff.toml"
 
 [lint.isort]
-known-third-party = ["aiohttp_mcp"]
+known-third-party = ["aiohttp_mcp_server"]

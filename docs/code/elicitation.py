@@ -2,24 +2,24 @@ import os
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
 
-import aiohttp_mcp
+import aiohttp_mcp_server as mcp
 from aiohttp import ClientSession, web
 from yarl import URL
 
-delete_project: aiohttp_mcp.PromptHandler
+delete_project: mcp.PromptHandler
 exchange_code: Callable[[str], Awaitable[str]]
 fetch_events: Callable[[str], Awaitable[Sequence[object]]]
 is_signed: Callable[[str, str], Awaitable[bool]]
 store_key: Callable[[str, str], Awaitable[None]]
 
 
-async def form_elicitation(request: aiohttp_mcp.MCPRequest, date: str) -> str:
-    form = aiohttp_mcp.FormElicitation(
+async def form_elicitation(request: mcp.MCPRequest, date: str) -> str:
+    form = mcp.FormElicitation(
         {
-            "seat": aiohttp_mcp.StringSchema(
+            "seat": mcp.StringSchema(
                 description="Preferred seat", min_length=2, max_length=3
             ),
-            "meal": aiohttp_mcp.EnumSchema(
+            "meal": mcp.EnumSchema(
                 options={"veg": "Vegetarian", "std": "Standard"},
                 default="std",
                 required=False,
@@ -35,27 +35,27 @@ async def form_elicitation(request: aiohttp_mcp.MCPRequest, date: str) -> str:
     return f"Booked flight on {date}, seat {confirm.content['seat']}."
 
 
-async def url_elicitation(request: aiohttp_mcp.MCPRequest, document: str) -> str:
+async def url_elicitation(request: mcp.MCPRequest, document: str) -> str:
     assert request.auth is not None and request.auth.subject is not None
     if not await is_signed(document, request.auth.subject):
         grant = await request.elicit(
             "signature",
-            aiohttp_mcp.URLElicitation(
+            mcp.URLElicitation(
                 "https://mcp.example.com/sign", message=f"Sign {document} to continue.",
             ),
         )
         if grant.action != "accept":
             return "The document was not signed."
         if not await is_signed(document, request.auth.subject):
-            raise aiohttp_mcp.InputRequired(state={})
+            raise mcp.InputRequired(state={})
     return f"{document} signed."
 
 
-async def secure_form_elicitation(request: aiohttp_mcp.MCPRequest) -> str:
+async def secure_form_elicitation(request: mcp.MCPRequest) -> str:
     result = await request.elicit(
         "credentials",
-        aiohttp_mcp.SecureFormElicitation(
-            {"api_key": aiohttp_mcp.StringSchema(min_length=8)},
+        mcp.SecureFormElicitation(
+            {"api_key": mcp.StringSchema(min_length=8)},
             message="Provide your weather API key.",
         ),
     )
@@ -67,14 +67,14 @@ async def secure_form_elicitation(request: aiohttp_mcp.MCPRequest) -> str:
     return "API key saved."
 
 
-def same_site_endpoint(app: web.Application, authorization: aiohttp_mcp.Authorization) -> None:
+def same_site_endpoint(app: web.Application, authorization: mcp.Authorization) -> None:
     from aiohttp_security import authorized_userid
 
     # Pending approvals: opaque ID -> (requesting MCP subject, approved).
     approvals: dict[str, tuple[str, bool]] = {}
 
 
-    async def delete_project(request: aiohttp_mcp.MCPRequest, project: str) -> str:
+    async def delete_project(request: mcp.MCPRequest, project: str) -> str:
         """Delete a project, after out-of-band confirmation."""
         assert request.auth is not None  # auth is only None when auth not configured
         subject = request.auth.subject
@@ -98,7 +98,7 @@ def same_site_endpoint(app: web.Application, authorization: aiohttp_mcp.Authoriz
         )
         grant = await request.elicit(
             "approve",
-            aiohttp_mcp.URLElicitation(
+            mcp.URLElicitation(
                 str(approve_url), message=f"Approve deletion of {project} to continue.",
             ),
             state={"approval": approval_id},
@@ -109,7 +109,7 @@ def same_site_endpoint(app: web.Application, authorization: aiohttp_mcp.Authoriz
         if not approvals[approval_id][1]:
             # Consent to open the URL is not approval itself: the browser
             # interaction may still be in progress, so ask for a retry.
-            raise aiohttp_mcp.InputRequired(state={"approval": approval_id})
+            raise mcp.InputRequired(state={"approval": approval_id})
         del approvals[approval_id]
         return f"{project} deleted."
 
@@ -135,14 +135,14 @@ def same_site_endpoint(app: web.Application, authorization: aiohttp_mcp.Authoriz
     resource = app.router.add_resource("/approve/{id}", name="approve")
     resource.add_route("GET", approve)
     resource.add_route("POST", approve)
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         app,
         authorization=authorization,
-        prompts=aiohttp_mcp.PromptRegistry(delete_project),
+        prompts=mcp.PromptRegistry(delete_project),
     )
 
 
-def external_as_login(app: web.Application, authorization: aiohttp_mcp.Authorization) -> None:
+def external_as_login(app: web.Application, authorization: mcp.Authorization) -> None:
     from aiohttp_session import get_session, new_session
     from aiohttp_session import setup as session_setup
     from aiohttp_session.cookie_storage import EncryptedCookieStorage
@@ -246,14 +246,14 @@ def external_as_login(app: web.Application, authorization: aiohttp_mcp.Authoriza
     resource = app.router.add_resource("/approve/{id}", name="approve")
     resource.add_route("GET", approve)
     resource.add_route("POST", approve)
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         app,
         authorization=authorization,
-        prompts=aiohttp_mcp.PromptRegistry(delete_project),
+        prompts=mcp.PromptRegistry(delete_project),
     )
 
 
-def oauth_elicitation(app: web.Application, authorization: aiohttp_mcp.Authorization) -> None:
+def oauth_elicitation(app: web.Application, authorization: mcp.Authorization) -> None:
     from aiohttp_security import authorized_userid
 
     # Third-party OAuth tokens, keyed by user ID.
@@ -261,7 +261,7 @@ def oauth_elicitation(app: web.Application, authorization: aiohttp_mcp.Authoriza
     # In-flight OAuth flows: ``state`` parameter -> user ID.
     flow_states: dict[str, str] = {}
 
-    async def import_calendar(request: aiohttp_mcp.MCPRequest) -> str:
+    async def import_calendar(request: mcp.MCPRequest) -> str:
         """Import the user's external calendar."""
         assert request.auth is not None and request.auth.subject is not None
         subject = request.auth.subject
@@ -276,7 +276,7 @@ def oauth_elicitation(app: web.Application, authorization: aiohttp_mcp.Authoriza
             )
             grant = await request.elicit(
                 "grant",
-                aiohttp_mcp.URLElicitation(
+                mcp.URLElicitation(
                     # Our own endpoint, not the third party's authorization
                     # URL: it must verify who opened it before the flow starts.
                     str(connect_url),
@@ -287,7 +287,7 @@ def oauth_elicitation(app: web.Application, authorization: aiohttp_mcp.Authoriza
                 return "Calendar not connected."
             if subject not in calendar_tokens:
                 # The browser flow has not finished; ask the client to retry.
-                raise aiohttp_mcp.InputRequired(state={"waiting": True})
+                raise mcp.InputRequired(state={"waiting": True})
         events = await fetch_events(calendar_tokens[subject])
         return f"Imported {len(events)} events."
 
@@ -328,8 +328,8 @@ def oauth_elicitation(app: web.Application, authorization: aiohttp_mcp.Authoriza
 
     app.router.add_get("/connect/calendar", connect, name="connect-calendar")
     app.router.add_get("/connect/calendar/callback", callback, name="calendar-callback")
-    server = aiohttp_mcp.setup(
+    server = mcp.setup(
         app,
         authorization=authorization,
-        prompts=aiohttp_mcp.PromptRegistry(import_calendar),
+        prompts=mcp.PromptRegistry(import_calendar),
     )

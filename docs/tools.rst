@@ -5,7 +5,7 @@ Tools
 `Tools <https://modelcontextprotocol.io/specification/2026-07-28/server/tools>`_
 are functions the language model can discover and invoke (e.g. querying a
 database, performing a computation etc.). Passing a
-:class:`~aiohttp_mcp.ToolRegistry` to :func:`aiohttp_mcp.setup` enables the
+:class:`~aiohttp_mcp_server.ToolRegistry` to :func:`aiohttp_mcp_server.setup` enables the
 ``tools`` capability:
 
 .. literalinclude:: code/tools.py
@@ -47,7 +47,7 @@ options) where possible.
 Tool errors
 ===========
 
-Raise :class:`~aiohttp_mcp.ToolError` to signal an error to the model. The error
+Raise :class:`~aiohttp_mcp_server.ToolError` to signal an error to the model. The error
 message should be actionable, so the model can correct itself (e.g. by fixing the input
 or trying again at a later time).
 

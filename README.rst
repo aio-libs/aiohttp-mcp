@@ -16,7 +16,7 @@ Usage
 
 .. code-block:: python
 
-    import aiohttp_mcp
+    import aiohttp_mcp_server as mcp
     from aiohttp import web
 
     async def get_weather(location: str) -> str:
@@ -24,7 +24,7 @@ Usage
         return f"Sunny in {location}."
 
     app = web.Application()
-    aiohttp_mcp.setup(app, tools=aiohttp_mcp.ToolRegistry(get_weather))
+    mcp.setup(app, tools=mcp.ToolRegistry(get_weather))
     web.run_app(app, handler_cancellation=True)
 
 This serves the MCP endpoint at ``/mcp``. This can be added to any existing
@@ -47,7 +47,7 @@ authorization server) so a complete, working deployment is:
     import os
     import secrets
 
-    import aiohttp_mcp
+    import aiohttp_mcp_server as mcp
     from aiohttp import web
 
     async def check_credentials(username: str, password: str, request: web.Request) -> bool:
@@ -56,10 +56,10 @@ authorization server) so a complete, working deployment is:
         )
 
     app = web.Application()
-    aiohttp_mcp.setup(
+    mcp.setup(
         app,
         allowed_origins=("mcp.server.example",),
-        authorization=aiohttp_mcp.LocalAuthorization(
+        authorization=mcp.LocalAuthorization(
             check_credentials,
             resource="https://mcp.server.example",
             secret=bytes.fromhex(os.environ["MCP_TOKEN_KEY"]),

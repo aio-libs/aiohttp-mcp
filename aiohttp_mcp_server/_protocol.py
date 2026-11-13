@@ -316,7 +316,7 @@ class PromptArgument(TypedDict):
 
 
 # Named ``Prompt`` in the specification schema; renamed to avoid colliding
-# with the public aiohttp_mcp.Prompt descriptor.
+# with the public aiohttp_mcp_server.Prompt descriptor.
 # TODO(PY315): closed=True
 class PromptInfo(TypedDict):
     name: str
