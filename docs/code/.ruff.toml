@@ -1,4 +1,4 @@
-# Doc snippets depict user code, where aiohttp-mcp is a third-party library.
+# Doc snippets depict user code, where aiohttp-mcp-server is a third-party library.
 extend = "../../.ruff.toml"
 
 [lint.isort]

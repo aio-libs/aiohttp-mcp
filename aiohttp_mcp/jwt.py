@@ -1,6 +1,6 @@
 """JWT access-token validation (RFC 9068) for an external authorization server.
 
-Requires the ``jwt`` extra (``pip install aiohttp-mcp[jwt]``).
+Requires the ``jwt`` extra (``pip install aiohttp-mcp-server[jwt]``).
 """
 
 import logging

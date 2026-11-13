@@ -94,7 +94,7 @@ token schemes, otherwise a custom function will need to be used.
 
 **JWT access tokens** (:rfc:`9068`) can be validated with the
 :class:`aiohttp_mcp.jwt.JWTAuthorization` helper. This requires the ``jwt`` extra
-to be installed (``pip install aiohttp-mcp[jwt]``):
+to be installed (``pip install aiohttp-mcp-server[jwt]``):
 
 .. literalinclude:: code/authorization.py
    :pyobject: jwt_authorization

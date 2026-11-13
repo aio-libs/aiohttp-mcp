@@ -1,5 +1,5 @@
-aiohttp-mcp
-===========
+aiohttp-mcp-server
+==================
 
 A framework to easily make production-grade `MCP <https://modelcontextprotocol.io/>`_
 servers for AI agents.
@@ -9,7 +9,7 @@ Installation
 
 .. code-block:: bash
 
-    pip install aiohttp-mcp
+    pip install aiohttp-mcp-server
 
 Usage
 -----
@@ -39,7 +39,7 @@ Remote servers and auth
 
 A server exposed on the internet needs two additions: the domain added to
 ``allowed_origins``, and an authorization configuration. MCP uses OAuth 2.1, and
-aiohttp-mcp ships everything needed for it out of the box (including an
+aiohttp-mcp-server ships everything needed for it out of the box (including an
 authorization server) so a complete, working deployment is:
 
 .. code-block:: python

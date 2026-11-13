@@ -118,7 +118,7 @@ jobs:
       uses: aio-libs/create-release@v1.6.6
       with:
         changes_file: CHANGES.rst
-        name: aiohttp-mcp
+        name: aiohttp-mcp-server
         version_file: aiohttp_mcp/__init__.py
         github_token: ${{ secrets.GITHUB_TOKEN }}
         dist_dir: dist

@@ -1,6 +1,6 @@
-====================
-:brand:`aiohttp-mcp`
-====================
+===========================
+:brand:`aiohttp-mcp-server`
+===========================
 
 A framework to easily make production-grade
 `MCP <https://modelcontextprotocol.io/>`_ servers for AI agents, built on
@@ -11,7 +11,7 @@ Installation
 
 .. code-block:: bash
 
-   pip install aiohttp-mcp
+   pip install aiohttp-mcp-server
 
 Usage
 =====

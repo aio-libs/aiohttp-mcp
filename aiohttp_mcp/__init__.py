@@ -125,7 +125,7 @@ __all__ = (
 def setup(
     app: web.Application,
     *,
-    name: str = "aiohttp-mcp server",
+    name: str = "aiohttp-mcp-server",
     version: str = __version__,
     path: str = "/mcp",
     title: str | None = None,

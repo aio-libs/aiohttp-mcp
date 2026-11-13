@@ -14,7 +14,7 @@ _PYPROJECT = _REPO_ROOT / "pyproject.toml"
 release = tomllib.loads(_PYPROJECT.read_text("utf-8"))["project"]["version"]
 version = ".".join(release.split(".")[:2])
 
-project = "aiohttp-mcp"
+project = "aiohttp-mcp-server"
 copyright = "2026, aio-libs contributors"
 author = "aio-libs contributors"
 
@@ -53,7 +53,7 @@ highlight_language = "python3"
 
 # The API reference is generated from docstrings, with type annotations rendered
 # in the signatures. Every annotation becomes a cross-reference resolved under
-# ``nitpicky``; aiohttp-mcp types are documented in api.rst, external ones via
+# ``nitpicky``; aiohttp-mcp-server types are documented in api.rst, external ones via
 # intersphinx or ``nitpick_ignore``.
 autodoc_member_order = "bysource"
 autodoc_typehints = "signature"
