@@ -1,5 +1,4 @@
 import sys
-import tomllib
 from pathlib import Path
 
 from docutils import nodes
@@ -7,11 +6,11 @@ from docutils import nodes
 _REPO_ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
+# The version is dynamic metadata in pyproject.toml, so read it off the package.
+from aiohttp_mcp_server import __version__ as release
+
 # -- Project information -----------------------------------------------------
 
-_PYPROJECT = _REPO_ROOT / "pyproject.toml"
-# Parse the version from pyproject.toml rather than importing the package.
-release = tomllib.loads(_PYPROJECT.read_text("utf-8"))["project"]["version"]
 version = ".".join(release.split(".")[:2])
 
 project = "aiohttp-mcp-server"
