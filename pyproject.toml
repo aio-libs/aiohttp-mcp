@@ -32,7 +32,7 @@ dependencies = [
 jwt = ["PyJWT[crypto]>=2.8"]
 
 [project.urls]
-Documentation = "https://aiohttp-mcp-server.readthedocs.io"
+Documentation = "https://aiohttp-mcp-server.aio-libs.org"
 Repository = "https://github.com/aio-libs/aiohttp-mcp-server"
 Issues = "https://github.com/aio-libs/aiohttp-mcp-server/issues"
 
